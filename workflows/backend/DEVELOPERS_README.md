@@ -17,6 +17,41 @@ The backend is built using FastAPI, a modern, high-performance Python web framew
 
 This separation of concerns makes the codebase easier to understand, maintain, and test.
 
+## Workflow Lifecycle and Detailed Architecture
+
+While the backend provides the API for management, the core logic of creating and running workflows resides in the `workflow_use` package. The lifecycle consists of three main phases: Recording, Building, and Execution.
+
+### 1. Recording Phase (`recorder` module)
+
+This is the initial phase where a user's actions are captured to create a raw workflow.
+
+-   **Mechanism**: The `RecordingService` starts a new browser session with a special **browser extension** loaded.
+-   **Event Capture**: The extension monitors user interactions (clicks, typing, navigation) and sends this data as a series of events to a local web server run by the `RecordingService`.
+-   **Output**: When the recording stops, the service compiles these events into a raw JSON file. This file is a simple, linear log of everything the user did.
+
+### 2. Building Phase (`builder` module)
+
+This phase transforms the raw recording into a smart, executable workflow using a Large Language Model (LLM).
+
+-   **Mechanism**: The `BuilderService` takes the raw JSON recording, a high-level user goal (e.g., "Log in to the website and navigate to the dashboard"), and screenshots from the recording session.
+-   **The Role of the LLM**: The service sends all of this context to an LLM. It asks the LLM to analyze the raw steps and the user's goal to create a more robust and intelligent workflow. The LLM might:
+    -   Add descriptions to each step.
+    -   Clean up or combine redundant actions.
+    -   Infer the user's intent and add logic.
+    -   Define which data should be extracted from a page.
+-   **Output**: The builder produces a final, refined `WorkflowDefinitionSchema` (a structured JSON object). This is the executable workflow that the backend will run.
+
+### 3. Execution Phase (`workflow` and `controller` modules)
+
+This is the final phase where the refined workflow is executed.
+
+-   **Mechanism**: The `Workflow` service (`workflow.service.py`) is the main orchestrator. It loads the `WorkflowDefinitionSchema` and executes its steps one by one.
+-   **Data Injection**: The `run` method accepts an `inputs` dictionary. These values are loaded into a `context` object. Placeholders in the workflow steps (e.g., a URL or a username in the format `{username}`) are dynamically replaced with values from this context. The output of one step can also be saved to the context for use in a later step.
+-   **Step Execution**:
+    -   **Deterministic Steps**: For simple, predefined actions like "click" or "input", the `Workflow` service calls the `WorkflowController`. The controller contains the precise code to perform these actions using the browser automation library.
+    -   **Agentic Steps**: For complex or ambiguous tasks, the workflow can contain an "agent" step. This delegates control to an LLM-powered agent, which decides on the best course of action to achieve its given task.
+-   **LLM-Powered Error Recovery**: A key feature of the execution engine is its ability to recover from errors. If a deterministic step fails (e.g., a button with a specific CSS selector is not found), the system can **fall back to an agent**. It prompts the LLM with the details of the error and the original goal, and the agent attempts to fix the problem and complete the step. This makes the workflows significantly more resilient to minor UI changes.
+
 ## File-by-File Breakdown
 
 Here is a detailed description of each file in the `workflows/backend` directory:
