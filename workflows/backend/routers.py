@@ -3,8 +3,8 @@ import uuid
 
 from fastapi import APIRouter, HTTPException
 
-from .service import WorkflowService
-from .views import (
+from backend.service import WorkflowService
+from backend.views import (
 	WorkflowCancelResponse,
 	WorkflowExecuteRequest,
 	WorkflowExecuteResponse,
