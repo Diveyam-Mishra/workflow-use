@@ -30,6 +30,19 @@ export default defineBackground(() => {
   // Store tab information (URL, potentially title)
   const tabInfo: { [tabId: number]: { url?: string; title?: string } } = {};
 
+  // Track which tabs have been explicitly activated (brought to foreground) by the user.
+  // We will ignore events originating from tabs that were never activated to reduce noise
+  // (for example: ad / tracker tabs that load in the background).
+  const activatedTabs = new Set<number>();
+
+  // Track user clicks that are likely to open a new tab (Ctrl/Cmd + click, target=_blank etc.).
+  // Content scripts will send a PREPARE_NEW_TAB signal; we keep timestamp to correlate
+  // shortly following chrome.tabs.onCreated events so we can mark those tabs as user initiated.
+  const recentNewTabIntents: { [openerTabId: number]: number } = {};
+
+  // Heuristic window (ms) within which a created tab following a user intent is considered relevant.
+  const NEW_TAB_INTENT_WINDOW_MS = 4000;
+
   let isRecordingEnabled = true; // Default to disabled (OFF)
   let lastWorkflowHash: string | null = null; // Cache for the last logged workflow hash
 
@@ -144,6 +157,16 @@ export default defineBackground(() => {
     console.log(`Sending ${type}:`, payload);
     const tabId = payload.tabId;
     if (tabId) {
+      // Skip capturing events for tabs that have never been activated AND are not the original opener
+      // unless we have positively identified them as a recent user initiated tab (click intent -> creation).
+      if (
+        type !== "CUSTOM_TAB_ACTIVATED" &&
+        !activatedTabs.has(tabId) &&
+        !(payload.openerTabId && recentNewTabIntents[payload.openerTabId] && Date.now() - recentNewTabIntents[payload.openerTabId] < NEW_TAB_INTENT_WINDOW_MS)
+      ) {
+        // Silently ignore background noise (ad/tracker tabs) until user actually focuses them.
+        return;
+      }
       if (!sessionLogs[tabId]) {
         sessionLogs[tabId] = [];
       }
@@ -171,6 +194,12 @@ export default defineBackground(() => {
       url: tab.pendingUrl || tab.url,
       windowId: tab.windowId,
       index: tab.index,
+      userInitiated:
+        !!(
+          tab.openerTabId &&
+          recentNewTabIntents[tab.openerTabId] &&
+          Date.now() - recentNewTabIntents[tab.openerTabId] < NEW_TAB_INTENT_WINDOW_MS
+        ),
     });
   });
 
@@ -188,6 +217,7 @@ export default defineBackground(() => {
   });
 
   chrome.tabs.onActivated.addListener((activeInfo) => {
+  activatedTabs.add(activeInfo.tabId);
     sendTabEvent("CUSTOM_TAB_ACTIVATED", {
       tabId: activeInfo.tabId,
       windowId: activeInfo.windowId,
@@ -214,64 +244,90 @@ export default defineBackground(() => {
 
   function convertStoredEventsToSteps(events: StoredEvent[]): Step[] {
     const steps: Step[] = [];
+    const lastNavigationIndexByTab: Record<number, number> = {};
+    const lastInputPerKey: Record<string, { idx: number; ts: number; value: string }> = {};
 
     for (const event of events) {
       switch (event.messageType) {
-        case "CUSTOM_CLICK_EVENT": {
-          const clickEvent = event as StoredCustomClickEvent;
-          // Ensure required fields are present, even if optional in source type for some reason
+        case "CUSTOM_TAB_CREATED":
+        case "CUSTOM_TAB_UPDATED":
+        case "CUSTOM_TAB_ACTIVATED": {
+          const navUrl = (event as any).url || (event as any).changeInfo?.url;
+          if (!navUrl) break;
+          const tabId = (event as any).tabId;
+          const userInitiated = (event as any).userInitiated;
+          if (!activatedTabs.has(tabId) && !userInitiated) break; // suppress background noise
+
+          const existingIdx = lastNavigationIndexByTab[tabId];
           if (
-            clickEvent.url &&
-            clickEvent.frameUrl &&
-            clickEvent.xpath &&
-            clickEvent.elementTag
+            existingIdx !== undefined &&
+            steps[existingIdx] &&
+            steps[existingIdx].type === "navigation"
           ) {
-            const step: ClickStep = {
-              type: "click",
-              timestamp: clickEvent.timestamp,
-              tabId: clickEvent.tabId,
-              url: clickEvent.url,
-              frameUrl: clickEvent.frameUrl,
-              xpath: clickEvent.xpath,
-              cssSelector: clickEvent.cssSelector,
-              elementTag: clickEvent.elementTag,
-              elementText: clickEvent.elementText,
-              screenshot: clickEvent.screenshot,
-            };
-            steps.push(step);
+            // Update existing navigation (redirect / title change)
+            (steps[existingIdx] as NavigationStep).url = navUrl;
+            steps[existingIdx].timestamp = event.timestamp;
           } else {
-            console.warn("Skipping incomplete CUSTOM_CLICK_EVENT:", clickEvent);
+            const nav: NavigationStep = {
+              type: "navigation",
+              timestamp: event.timestamp,
+              tabId,
+              url: navUrl,
+            };
+            steps.push(nav);
+            lastNavigationIndexByTab[tabId] = steps.length - 1;
           }
           break;
         }
-
+        case "CUSTOM_CLICK_EVENT": {
+          const click = event as StoredCustomClickEvent;
+          if (click.url && click.xpath && click.elementTag) {
+            const step: ClickStep = {
+              type: "click",
+              timestamp: click.timestamp,
+              tabId: click.tabId,
+              url: click.url,
+              frameUrl: click.frameUrl,
+              xpath: click.xpath,
+              cssSelector: click.cssSelector,
+              elementTag: click.elementTag,
+              elementText: click.elementText,
+              screenshot: click.screenshot,
+            };
+            steps.push(step);
+          } else {
+            console.warn("Skipping incomplete CUSTOM_CLICK_EVENT", click);
+          }
+          break;
+        }
         case "CUSTOM_INPUT_EVENT": {
           const inputEvent = event as StoredCustomInputEvent;
-          if (
-            inputEvent.url &&
-            // inputEvent.frameUrl && // frameUrl might be null/undefined in some cases, let's allow merging if only one is present or both match
-            inputEvent.xpath &&
-            inputEvent.elementTag
-          ) {
+          if (inputEvent.url && inputEvent.xpath && inputEvent.elementTag) {
+            const key = `${inputEvent.tabId}|${inputEvent.xpath}`;
+            const prior = lastInputPerKey[key];
+            const nowTs = inputEvent.timestamp;
+            const isEmpty = (inputEvent as any).value === "";
+            if (isEmpty && prior && prior.value === "" && nowTs - prior.ts < 5000) {
+              // collapse rapid-fire repeated empties
+              steps[prior.idx].timestamp = nowTs;
+              break;
+            }
             const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
-
-            // Check if the last step was a mergeable input event
             if (
               lastStep &&
               lastStep.type === "input" &&
               lastStep.tabId === inputEvent.tabId &&
               lastStep.url === inputEvent.url &&
-              lastStep.frameUrl === inputEvent.frameUrl && // Ensure frameUrls match if both exist
+              lastStep.frameUrl === inputEvent.frameUrl &&
               lastStep.xpath === inputEvent.xpath &&
               lastStep.cssSelector === inputEvent.cssSelector &&
               lastStep.elementTag === inputEvent.elementTag
             ) {
-              // Update the last input step
               (lastStep as InputStep).value = inputEvent.value;
-              lastStep.timestamp = inputEvent.timestamp; // Update to latest timestamp
-              (lastStep as InputStep).screenshot = inputEvent.screenshot; // Update to latest screenshot
+              lastStep.timestamp = inputEvent.timestamp;
+              (lastStep as InputStep).screenshot = inputEvent.screenshot;
+              lastInputPerKey[key] = { idx: steps.length - 1, ts: nowTs, value: (inputEvent as any).value };
             } else {
-              // Add a new input step
               const newStep: InputStep = {
                 type: "input",
                 timestamp: inputEvent.timestamp,
@@ -285,24 +341,22 @@ export default defineBackground(() => {
                 screenshot: inputEvent.screenshot,
               };
               steps.push(newStep);
+              lastInputPerKey[key] = { idx: steps.length - 1, ts: nowTs, value: (inputEvent as any).value };
             }
           } else {
-            console.warn("Skipping incomplete CUSTOM_INPUT_EVENT:", inputEvent);
+            console.warn("Skipping incomplete CUSTOM_INPUT_EVENT", inputEvent);
           }
           break;
         }
-
         case "CUSTOM_KEY_EVENT": {
           const keyEvent = event as StoredCustomKeyEvent;
-          // Key press might not always have a target element (xpath, etc.)
-          // but needs at least url and key
           if (keyEvent.url && keyEvent.key) {
             const step: KeyPressStep = {
               type: "key_press",
               timestamp: keyEvent.timestamp,
               tabId: keyEvent.tabId,
               url: keyEvent.url,
-              frameUrl: keyEvent.frameUrl, // Can be missing
+              frameUrl: keyEvent.frameUrl,
               key: keyEvent.key,
               xpath: keyEvent.xpath,
               cssSelector: keyEvent.cssSelector,
@@ -311,77 +365,56 @@ export default defineBackground(() => {
             };
             steps.push(step);
           } else {
-            console.warn("Skipping incomplete CUSTOM_KEY_EVENT:", keyEvent);
+            console.warn("Skipping incomplete CUSTOM_KEY_EVENT", keyEvent);
           }
           break;
         }
-
         case "RRWEB_EVENT": {
-          // We only care about scroll events from rrweb for now
           const rrEvent = event as StoredRrwebEvent;
-          if (
-            rrEvent.type === EventType.IncrementalSnapshot &&
-            rrEvent.data.source === IncrementalSource.Scroll
-          ) {
-            const scrollData = rrEvent.data as {
-              id: number;
-              x: number;
-              y: number;
-            }; // Type assertion for clarity
-            const currentTabInfo = tabInfo[rrEvent.tabId]; // Get associated tab info for URL
-
-            // Check if the last step added was a mergeable scroll event
-            const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
             if (
-              lastStep &&
-              lastStep.type === "scroll" &&
-              lastStep.tabId === rrEvent.tabId &&
-              (lastStep as ScrollStep).targetId === scrollData.id
+              rrEvent.type === EventType.IncrementalSnapshot &&
+              rrEvent.data.source === IncrementalSource.Scroll
             ) {
-              // Update the last scroll step
-              (lastStep as ScrollStep).scrollX = scrollData.x;
-              (lastStep as ScrollStep).scrollY = scrollData.y;
-              lastStep.timestamp = rrEvent.timestamp; // Update to latest timestamp
-              // URL should already be set from the first event in the sequence
-            } else {
-              // Add a new scroll step
-              const newStep: ScrollStep = {
-                type: "scroll",
+              const scrollData = rrEvent.data as { id: number; x: number; y: number };
+              const currentTabInfo = tabInfo[rrEvent.tabId];
+              const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
+              if (
+                lastStep &&
+                lastStep.type === "scroll" &&
+                lastStep.tabId === rrEvent.tabId &&
+                (lastStep as ScrollStep).targetId === scrollData.id
+              ) {
+                (lastStep as ScrollStep).scrollX = scrollData.x;
+                (lastStep as ScrollStep).scrollY = scrollData.y;
+                lastStep.timestamp = rrEvent.timestamp;
+              } else {
+                const scrollStep: ScrollStep = {
+                  type: "scroll",
+                  timestamp: rrEvent.timestamp,
+                  tabId: rrEvent.tabId,
+                  targetId: scrollData.id,
+                  scrollX: scrollData.x,
+                  scrollY: scrollData.y,
+                  url: currentTabInfo?.url,
+                };
+                steps.push(scrollStep);
+              }
+            } else if (rrEvent.type === EventType.Meta && rrEvent.data?.href) {
+              const metaData = rrEvent.data as { href: string };
+              const nav: NavigationStep = {
+                type: "navigation",
                 timestamp: rrEvent.timestamp,
                 tabId: rrEvent.tabId,
-                targetId: scrollData.id,
-                scrollX: scrollData.x,
-                scrollY: scrollData.y,
-                url: currentTabInfo?.url, // Add URL if available
+                url: metaData.href,
               };
-              steps.push(newStep);
+              steps.push(nav);
             }
-          } else if (rrEvent.type === EventType.Meta && rrEvent.data?.href) {
-            // Also handle rrweb meta events as navigation
-            const metaData = rrEvent.data as { href: string };
-            const step: NavigationStep = {
-              type: "navigation",
-              timestamp: rrEvent.timestamp,
-              tabId: rrEvent.tabId,
-              url: metaData.href,
-            };
-            steps.push(step);
-          }
           break;
         }
-
-        // Add cases for other StoredEvent types to Step types if needed
-        // e.g., CUSTOM_SELECT_EVENT -> SelectStep
-        // e.g., CUSTOM_TAB_CREATED -> TabCreatedStep
-        // RRWEB_EVENT type 4 (Meta) or 3 (FullSnapshot) could potentially map to NavigationStep if needed.
-
         default:
-          // Ignore other event types for now
-          // console.log("Ignoring event type:", event.messageType);
           break;
       }
     }
-
     return steps;
   }
 
@@ -396,6 +429,8 @@ export default defineBackground(() => {
       "CUSTOM_INPUT_EVENT",
       "CUSTOM_SELECT_EVENT",
       "CUSTOM_KEY_EVENT",
+  // Synthetic event we will emit from content script just before an expected new tab open.
+  "PREPARE_NEW_TAB",
     ];
     if (
       message.type === "RRWEB_EVENT" ||
@@ -411,6 +446,13 @@ export default defineBackground(() => {
 
       const tabId = sender.tab.id;
       const isCustomEvent = customEventTypes.includes(message.type);
+
+      // Record intent for new tab opening to correlate with onCreated event.
+      if (message.type === "PREPARE_NEW_TAB") {
+        recentNewTabIntents[sender.tab.id] = Date.now();
+        // We do not store this as a workflow step; it's only heuristic metadata.
+        return false;
+      }
 
       // Function to store the event
       const storeEvent = (eventPayload: any, screenshotDataUrl?: string) => {

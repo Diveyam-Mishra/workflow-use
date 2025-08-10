@@ -241,6 +241,25 @@ function handleCustomClick(event: MouseEvent) {
   if (!targetElement) return;
 
   try {
+    // Detect if this click is likely to open a new tab so background can correlate upcoming tab creation.
+    // Heuristics: modifier key (Ctrl/Cmd / middle button) OR anchor with target=_blank / rel noopener.
+    const isMiddle = event.button === 1;
+    const isModifier = event.metaKey || event.ctrlKey; // Cmd (mac) or Ctrl (win/linux)
+    let anchorOpensNew = false;
+    if (targetElement instanceof HTMLAnchorElement) {
+      const a = targetElement as HTMLAnchorElement;
+      anchorOpensNew =
+        (a.target && a.target.toLowerCase() === "_blank") ||
+        a.rel.split(/\s+/).some((r) => r.toLowerCase() === "noopener" || r.toLowerCase() === "noreferrer");
+    }
+    if (isMiddle || isModifier || anchorOpensNew) {
+      chrome.runtime.sendMessage({ type: "PREPARE_NEW_TAB", payload: { reason: "potential_new_tab_click" } });
+    }
+  } catch (e) {
+    console.warn("Failed to evaluate new tab heuristic", e);
+  }
+
+  try {
     const xpath = getXPath(targetElement);
     const clickData = {
       timestamp: Date.now(),
@@ -263,11 +282,16 @@ function handleCustomClick(event: MouseEvent) {
 // --- End Custom Click Handler ---
 
 // --- Custom Input Handler ---
+// Maintain last recorded value & timestamp per element (keyed by xpath) to suppress noisy repeats
+const lastInputRecord: Record<string, { value: string; ts: number }> = {};
 function handleInput(event: Event) {
   if (!isRecordingActive) return;
   const targetElement = event.target as HTMLInputElement | HTMLTextAreaElement;
   if (!targetElement || !("value" in targetElement)) return;
   const isPassword = targetElement.type === "password";
+
+  // Ignore programmatic (non user-trusted) input events – these often cause massive duplication
+  if (!(event as InputEvent).isTrusted) return;
 
   try {
     const xpath = getXPath(targetElement);
@@ -280,6 +304,26 @@ function handleInput(event: Event) {
       elementTag: targetElement.tagName,
       value: isPassword ? "********" : targetElement.value,
     };
+
+    // Dedupe rule 1: If value unchanged for this element and within debounce window, skip
+    const DEBOUNCE_MS_INPUT = 1500;
+    const prev = lastInputRecord[xpath];
+    if (prev && prev.value === inputData.value && inputData.timestamp - prev.ts < DEBOUNCE_MS_INPUT) {
+      return; // Suppress noisy duplicate
+    }
+
+    // Dedupe rule 2: If value is empty string and we already recorded empty in last 5s, suppress further empties
+    if (
+      inputData.value === "" &&
+      prev &&
+      prev.value === "" &&
+      inputData.timestamp - prev.ts < 5000
+    ) {
+      return;
+    }
+
+    // Store/update last record metadata
+    lastInputRecord[xpath] = { value: inputData.value, ts: inputData.timestamp };
     console.log("Sending CUSTOM_INPUT_EVENT:", inputData);
     chrome.runtime.sendMessage({
       type: "CUSTOM_INPUT_EVENT",
