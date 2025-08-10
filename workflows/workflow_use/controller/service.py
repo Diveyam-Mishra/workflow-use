@@ -20,7 +20,7 @@ from workflow_use.controller.views import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_ACTION_TIMEOUT_MS = 1000
+DEFAULT_ACTION_TIMEOUT_MS = 2500
 
 # List of default actions from browser_use.controller.service.Controller to disable
 # todo: come up with a better way to filter out the actions (filter IN the actions would be much nicer in this case)
@@ -83,9 +83,48 @@ class WorkflowController(Controller):
 			page = await browser_session.get_current_page()
 			original_selector = params.cssSelector
 
+			# If frameUrl or frameIdPath are provided, narrow the search to that frame
+			def _select_context(pg):
+				try:
+					from playwright.async_api import Page, Frame
+					ctx: Page | Frame = pg
+					if getattr(params, 'frameIdPath', None):
+						parts = [p for p in str(params.frameIdPath).split('.') if p != '0' and p != '']
+						f = pg.main_frame
+						for seg in parts:
+							idx = int(seg)
+							if idx < len(f.child_frames):
+								f = f.child_frames[idx]
+							else:
+								return ctx
+						ctx = f
+					elif getattr(params, 'frameUrl', None):
+						from urllib.parse import urlparse
+						pf = urlparse(params.frameUrl)
+						for fr in pg.frames:
+							try:
+								ff = urlparse(fr.url)
+								# Match origin, and allow target frameUrl to be a prefix of full URL
+								if (ff.scheme, ff.netloc) == (pf.scheme, pf.netloc) and fr.url.startswith(params.frameUrl):
+									ctx = fr
+									break
+							except Exception:
+								continue
+				except Exception:
+					ctx = pg
+				return ctx
+
 			try:
+				# If the step declares a URL and it's different from current, navigate first (minimum action to reach expected DOM)
+				curr = (page.url or '').split('#')[0]
+				tgt = (getattr(params, 'url', None) or getattr(params, 'frameUrl', None) or '').split('#')[0]
+				if tgt and tgt.startswith('http') and curr != tgt:
+					await page.goto(tgt)
+					await page.wait_for_load_state()
+
+				ctx = _select_context(page)
 				locator, selector_used = await get_best_element_handle(
-					page,
+					ctx,
 					params.cssSelector,
 					params,
 					timeout_ms=DEFAULT_ACTION_TIMEOUT_MS,

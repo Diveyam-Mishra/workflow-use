@@ -23,6 +23,8 @@ class RecorderBase(StepMeta):
 	elementTag: Optional[str] = None
 	elementText: Optional[str] = None
 	frameUrl: Optional[str] = None
+	frameIdPath: Optional[str] = None
+	url: Optional[str] = None
 	screenshot: Optional[str] = None
 
 
