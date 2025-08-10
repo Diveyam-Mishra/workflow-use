@@ -24,8 +24,9 @@ import {
 } from "../lib/message-bus-types";
 
 export default defineBackground(() => {
-  // In-memory store for rrweb events, keyed by tabId
-  const sessionLogs: { [tabId: number]: StoredEvent[] } = {}; // Use StoredEvent type
+  // In-memory store for rrweb events, keyed by tabId and frameId
+  const sessionLogs: { [tabId: number]: { [frameId: number]: StoredEvent[] } } =
+    {};
 
   // Store tab information (URL, potentially title)
   const tabInfo: { [tabId: number]: { url?: string; title?: string } } = {};
@@ -69,7 +70,9 @@ export default defineBackground(() => {
     const allSteps: Step[] = Object.keys(sessionLogs)
       .flatMap((tabIdStr) => {
         const tabId = parseInt(tabIdStr, 10);
-        return convertStoredEventsToSteps(sessionLogs[tabId] || []);
+        const frames = sessionLogs[tabId] || {};
+        const eventsForTab = Object.values(frames).flat();
+        return convertStoredEventsToSteps(eventsForTab);
       })
       .sort((a, b) => a.timestamp - b.timestamp); // Sort chronologically
 
@@ -143,14 +146,20 @@ export default defineBackground(() => {
     if (!isRecordingEnabled) return;
     console.log(`Sending ${type}:`, payload);
     const tabId = payload.tabId;
+    const frameId = 0; // Tab events are associated with the main frame (frameId 0)
+
     if (tabId) {
       if (!sessionLogs[tabId]) {
-        sessionLogs[tabId] = [];
+        sessionLogs[tabId] = {};
       }
-      sessionLogs[tabId].push({
+      if (!sessionLogs[tabId][frameId]) {
+        sessionLogs[tabId][frameId] = [];
+      }
+      sessionLogs[tabId][frameId].push({
         messageType: type,
         timestamp: Date.now(),
         tabId: tabId,
+        frameId: frameId, // Add frameId to the event
         ...payload,
       });
       broadcastWorkflowDataUpdate(); // Call is async, will not block
@@ -160,7 +169,6 @@ export default defineBackground(() => {
         type,
         payload
       );
-      // Optionally store in a global log?
     }
   }
 
@@ -230,6 +238,7 @@ export default defineBackground(() => {
               type: "click",
               timestamp: clickEvent.timestamp,
               tabId: clickEvent.tabId,
+              frameId: clickEvent.frameId,
               url: clickEvent.url,
               frameUrl: clickEvent.frameUrl,
               xpath: clickEvent.xpath,
@@ -260,6 +269,7 @@ export default defineBackground(() => {
               lastStep &&
               lastStep.type === "input" &&
               lastStep.tabId === inputEvent.tabId &&
+              lastStep.frameId === inputEvent.frameId &&
               lastStep.url === inputEvent.url &&
               lastStep.frameUrl === inputEvent.frameUrl && // Ensure frameUrls match if both exist
               lastStep.xpath === inputEvent.xpath &&
@@ -276,6 +286,7 @@ export default defineBackground(() => {
                 type: "input",
                 timestamp: inputEvent.timestamp,
                 tabId: inputEvent.tabId,
+                frameId: inputEvent.frameId,
                 url: inputEvent.url,
                 frameUrl: inputEvent.frameUrl,
                 xpath: inputEvent.xpath,
@@ -301,6 +312,7 @@ export default defineBackground(() => {
               type: "key_press",
               timestamp: keyEvent.timestamp,
               tabId: keyEvent.tabId,
+              frameId: keyEvent.frameId,
               url: keyEvent.url,
               frameUrl: keyEvent.frameUrl, // Can be missing
               key: keyEvent.key,
@@ -336,6 +348,7 @@ export default defineBackground(() => {
               lastStep &&
               lastStep.type === "scroll" &&
               lastStep.tabId === rrEvent.tabId &&
+              lastStep.frameId === rrEvent.frameId &&
               (lastStep as ScrollStep).targetId === scrollData.id
             ) {
               // Update the last scroll step
@@ -349,6 +362,7 @@ export default defineBackground(() => {
                 type: "scroll",
                 timestamp: rrEvent.timestamp,
                 tabId: rrEvent.tabId,
+                frameId: rrEvent.frameId,
                 targetId: scrollData.id,
                 scrollX: scrollData.x,
                 scrollY: scrollData.y,
@@ -363,6 +377,7 @@ export default defineBackground(() => {
               type: "navigation",
               timestamp: rrEvent.timestamp,
               tabId: rrEvent.tabId,
+              frameId: rrEvent.frameId,
               url: metaData.href,
             };
             steps.push(step);
@@ -404,18 +419,22 @@ export default defineBackground(() => {
       if (!isRecordingEnabled) {
         return false; // Don't process if disabled, not async
       }
-      if (!sender.tab?.id) {
-        console.warn("Received event without tab ID:", message);
-        return false; // Ignore events without a tab ID, not async
+      if (!sender.tab?.id || sender.frameId === undefined) {
+        console.warn("Received event without tab ID or frame ID:", message);
+        return false; // Ignore events without a tab ID or frame ID
       }
 
       const tabId = sender.tab.id;
+      const frameId = sender.frameId;
       const isCustomEvent = customEventTypes.includes(message.type);
 
       // Function to store the event
       const storeEvent = (eventPayload: any, screenshotDataUrl?: string) => {
         if (!sessionLogs[tabId]) {
-          sessionLogs[tabId] = [];
+          sessionLogs[tabId] = {};
+        }
+        if (!sessionLogs[tabId][frameId]) {
+          sessionLogs[tabId][frameId] = [];
         }
         if (!tabInfo[tabId]) {
           tabInfo[tabId] = {};
@@ -430,10 +449,11 @@ export default defineBackground(() => {
         const eventWithMeta = {
           ...eventPayload,
           tabId: tabId,
+          frameId: frameId,
           messageType: message.type,
           screenshot: screenshotDataUrl,
         };
-        sessionLogs[tabId].push(eventWithMeta);
+        sessionLogs[tabId][frameId].push(eventWithMeta);
         broadcastWorkflowDataUpdate(); // Call is async, will not block
         // console.log(`Stored ${message.type} from tab ${tabId}`);
       };

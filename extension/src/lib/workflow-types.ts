@@ -20,6 +20,7 @@ export interface BaseStep {
   type: string;
   timestamp: number;
   tabId: number;
+  frameId?: number;
   url?: string; // Made optional as not all original events have it directly
 }
 
