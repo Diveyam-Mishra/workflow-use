@@ -31,6 +31,9 @@ export default defineBackground(() => {
   // Store tab information (URL, potentially title)
   const tabInfo: { [tabId: number]: { url?: string; title?: string } } = {};
 
+  // Store the primary domain for each tab to filter out third-party iframe noise
+  const tabMainDomain: { [tabId: number]: string } = {};
+
   let isRecordingEnabled = true; // Default to disabled (OFF)
   let lastWorkflowHash: string | null = null; // Cache for the last logged workflow hash
 
@@ -139,6 +142,31 @@ export default defineBackground(() => {
       });
   }
 
+  // --- Helper Functions ---
+  function getRegistrableDomain(url: string): string | null {
+    if (!url || !url.startsWith("http")) {
+      return null;
+    }
+    try {
+      const hostname = new URL(url).hostname;
+      const parts = hostname.split(".").reverse();
+      if (parts.length >= 2) {
+        // This is a simple heuristic, works for .com, .net, .co.uk, etc.
+        // A proper solution would use a Public Suffix List, but this is a good start.
+        if (
+          parts.length > 2 &&
+          ["com", "net", "org", "gov", "edu", "co"].includes(parts[1])
+        ) {
+          return `${parts[2]}.${parts[1]}.${parts[0]}`;
+        }
+        return `${parts[1]}.${parts[0]}`;
+      }
+      return hostname;
+    } catch (e) {
+      return null;
+    }
+  }
+
   // --- Tab Event Listeners ---
 
   // Function to send tab events (only if recording is enabled)
@@ -183,6 +211,16 @@ export default defineBackground(() => {
   });
 
   chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    // Track the main domain of the tab for filtering, only on top-level navigations
+    if (changeInfo.url && tab.url) {
+      const newDomain = getRegistrableDomain(tab.url);
+      // Update only if the domain is valid and has changed
+      if (newDomain && tabMainDomain[tabId] !== newDomain) {
+        // console.log(`Tab ${tabId} main domain changed to: ${newDomain}`);
+        tabMainDomain[tabId] = newDomain;
+      }
+    }
+
     // Filter for relevant changes (e.g., url or status complete)
     if (changeInfo.url || changeInfo.status === "complete") {
       sendTabEvent("CUSTOM_TAB_UPDATED", {
@@ -220,6 +258,10 @@ export default defineBackground(() => {
 
   // --- Conversion Function ---
 
+  // Time in ms to deduplicate click events. If two clicks on the same element
+  // happen within this window, the second one is ignored.
+  const CLICK_DEDUPLICATION_MS = 50;
+
   function convertStoredEventsToSteps(events: StoredEvent[]): Step[] {
     const steps: Step[] = [];
 
@@ -234,6 +276,20 @@ export default defineBackground(() => {
             clickEvent.xpath &&
             clickEvent.elementTag
           ) {
+            // Deduplicate clicks on the same element within a short time window
+            const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
+            if (
+              lastStep &&
+              lastStep.type === "click" &&
+              lastStep.tabId === clickEvent.tabId &&
+              lastStep.frameId === clickEvent.frameId &&
+              (lastStep as ClickStep).xpath === clickEvent.xpath &&
+              clickEvent.timestamp - lastStep.timestamp < CLICK_DEDUPLICATION_MS
+            ) {
+              // Likely a duplicate event (e.g., from both mousedown and click), ignore it.
+              break;
+            }
+
             const step: ClickStep = {
               type: "click",
               timestamp: clickEvent.timestamp,
@@ -373,12 +429,46 @@ export default defineBackground(() => {
           } else if (rrEvent.type === EventType.Meta && rrEvent.data?.href) {
             // Also handle rrweb meta events as navigation
             const metaData = rrEvent.data as { href: string };
+            const url = metaData.href;
+            const frameId = rrEvent.frameId;
+            const tabId = rrEvent.tabId;
+
+            // 1. Filter out 'about:blank' navigations
+            if (url === "about:blank") {
+              break;
+            }
+
+            // 2. Dynamic Same-Domain Filtering for iframes
+            if (frameId !== 0) {
+              const mainDomain = tabMainDomain[tabId];
+              const frameDomain = getRegistrableDomain(url);
+
+              if (mainDomain && frameDomain && mainDomain !== frameDomain) {
+                // console.log(`Ignoring iframe navigation to different domain: ${frameDomain} (main: ${mainDomain})`);
+                break; // Skip this event
+              }
+            }
+
+            // 3. Consolidate redundant navigation events
+            const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
+            if (
+              lastStep &&
+              lastStep.type === "navigation" &&
+              lastStep.tabId === rrEvent.tabId &&
+              lastStep.frameId === rrEvent.frameId &&
+              (lastStep as NavigationStep).url === url
+            ) {
+              // This is a duplicate navigation event for the same frame and URL.
+              // We can ignore it to keep the workflow clean.
+              break;
+            }
+
             const step: NavigationStep = {
               type: "navigation",
               timestamp: rrEvent.timestamp,
               tabId: rrEvent.tabId,
               frameId: rrEvent.frameId,
-              url: metaData.href,
+              url: url, // Use the sanitized URL
             };
             steps.push(step);
           }
