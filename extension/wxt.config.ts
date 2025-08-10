@@ -19,5 +19,12 @@ export default defineConfig({
     // action: {
     //   default_popup: "popup.html",
     // },
+    "content_scripts": [
+      {
+        "matches": ["<all_urls>"],
+        "js": ["content.js"],
+        "all_frames": true
+      }
+    ]
   },
 });

@@ -7,6 +7,7 @@ export interface StoredCustomClickEvent {
   elementTag: string;
   elementText: string;
   tabId: number;
+  frameId?: number;
   messageType: "CUSTOM_CLICK_EVENT";
   screenshot?: string;
 }
@@ -20,6 +21,7 @@ export interface StoredCustomInputEvent {
   elementTag: string;
   value: string;
   tabId: number;
+  frameId?: number;
   messageType: "CUSTOM_INPUT_EVENT";
   screenshot?: string;
 }
@@ -34,6 +36,7 @@ export interface StoredCustomSelectEvent {
   selectedValue: string;
   selectedText: string;
   tabId: number;
+  frameId?: number;
   messageType: "CUSTOM_SELECT_EVENT";
   screenshot?: string;
 }
@@ -47,6 +50,7 @@ export interface StoredCustomKeyEvent {
   cssSelector?: string;
   elementTag?: string;
   tabId: number;
+  frameId?: number;
   messageType: "CUSTOM_KEY_EVENT";
   screenshot?: string;
 }
@@ -54,6 +58,7 @@ export interface StoredCustomKeyEvent {
 export interface StoredTabEvent {
   timestamp: number;
   tabId: number;
+  frameId?: number;
   messageType:
     | "CUSTOM_TAB_CREATED"
     | "CUSTOM_TAB_UPDATED"
@@ -73,6 +78,7 @@ export interface StoredRrwebEvent {
   data: any;
   timestamp: number;
   tabId: number;
+  frameId?: number;
   messageType: "RRWEB_EVENT";
 }
 
