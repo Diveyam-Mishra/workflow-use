@@ -1,0 +1,415 @@
+{
+  "name": "Recorded Workflow",
+  "description": "Recorded on 8/10/2025, 7:36:02 PM",
+  "version": "1.0.0",
+  "input_schema": [],
+  "steps": [
+    {
+      "type": "navigation",
+      "timestamp": 1754834711729,
+      "tabId": 388342629,
+      "url": "https://github.com/"
+    },
+    {
+      "type": "click",
+      "timestamp": 1754834714410,
+      "tabId": 388342629,
+      "url": "https://github.com/",
+      "frameUrl": "https://github.com/",
+      "xpath": "body/div[1]/div[1]/header[1]/div[1]/div[2]/div[4]/deferred-side-panel[1]/include-fragment[1]/react-partial-anchor[1]/button[1]/span[1]/span[1]/img[1]",
+      "cssSelector": "img.avatar.circle[src=\"https://avatars.githubusercontent.com/u/118588477?v=4\"][alt]",
+      "elementTag": "IMG",
+      "elementText": ""
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834716603,
+      "tabId": 388342629,
+      "url": "https://github.com/"
+    },
+    {
+      "type": "click",
+      "timestamp": 1754834717586,
+      "tabId": 388342629,
+      "url": "https://github.com/",
+      "frameUrl": "https://github.com/",
+      "xpath": "id(\":rm:--label\")",
+      "cssSelector": "span.prc-ActionList-ItemLabel-TmBhn[id=\":rm:--label\"]",
+      "elementTag": "SPAN",
+      "elementText": "Your repositories"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834720146,
+      "tabId": 388342629,
+      "url": "https://github.com/Diveyam-Mishra?tab=repositories"
+    },
+    {
+      "type": "click",
+      "timestamp": 1754834722609,
+      "tabId": 388342629,
+      "url": "https://github.com/Diveyam-Mishra?tab=repositories",
+      "frameUrl": "https://github.com/Diveyam-Mishra?tab=repositories",
+      "xpath": "id(\"user-repositories-list\")/ul[1]/li[1]/div[1]/div[1]/h3[1]/a[1]",
+      "cssSelector": "a[href=\"/Diveyam-Mishra/workflow-use\"]",
+      "elementTag": "A",
+      "elementText": "workflow-use"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834725037,
+      "tabId": 388342629,
+      "url": "https://github.com/Diveyam-Mishra/workflow-use"
+    },
+    {
+      "type": "click",
+      "timestamp": 1754834727705,
+      "tabId": 388342629,
+      "url": "https://github.com/Diveyam-Mishra/workflow-use",
+      "frameUrl": "https://github.com/Diveyam-Mishra/workflow-use",
+      "xpath": "id(\"repository-container-header\")/div[1]/div[1]/div[2]/span[1]/a[1]",
+      "cssSelector": "a.Link--inTextBlock[href=\"/browser-use/workflow-use\"]",
+      "elementTag": "A",
+      "elementText": "browser-use/workflow-use"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834729348,
+      "tabId": 388342629,
+      "url": "https://github.com/browser-use/workflow-use"
+    },
+    {
+      "type": "click",
+      "timestamp": 1754834733125,
+      "tabId": 388342629,
+      "url": "https://github.com/browser-use/workflow-use",
+      "frameUrl": "https://github.com/browser-use/workflow-use",
+      "xpath": "id(\"issues-repo-tab-count\")",
+      "cssSelector": "span.Counter[id=\"issues-repo-tab-count\"][title=\"31\"]",
+      "elementTag": "SPAN",
+      "elementText": "31"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834735187,
+      "tabId": 388342629,
+      "url": "https://github.com/browser-use/workflow-use/issues"
+    },
+    {
+      "type": "click",
+      "timestamp": 1754834739294,
+      "tabId": 388342629,
+      "url": "https://github.com/browser-use/workflow-use/issues",
+      "frameUrl": "https://github.com/browser-use/workflow-use/issues",
+      "xpath": "id(\":r2b:-list-view-node-:r39:\")/div[1]/h3[1]/span[1]/a[1]",
+      "cssSelector": "a.IssuePullRequestTitle-module__ListItemTitle_1--_xOfg[href=\"/browser-use/workflow-use/issues/72\"][data-testid=\"issue-pr-title-link\"]",
+      "elementTag": "A",
+      "elementText": "interactions in iframes are not recorded"
+    },
+    {
+      "type": "click",
+      "timestamp": 1754834743080,
+      "tabId": 388342629,
+      "url": "https://github.com/browser-use/workflow-use/issues/72",
+      "frameUrl": "https://github.com/browser-use/workflow-use/issues/72",
+      "xpath": "id(\"issue-body-viewer\")/div[1]/div[1]/p[1]/a[1]",
+      "cssSelector": "a[href=\"https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe\"]",
+      "elementTag": "A",
+      "elementText": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834744563,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834745358,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834745589,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834745783,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834745991,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834746135,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834746323,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834746486,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834746635,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834750281,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834752292,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834752434,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834752538,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834752650,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834752759,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834752878,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834752998,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834753118,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834753208,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834754516,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834754683,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834754813,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834754946,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834755084,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834755201,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834755351,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834755655,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834755781,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834757454,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834757538,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834757726,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834757820,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834757956,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834758060,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834758367,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834758556,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834758644,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834758715,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834758944,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834759118,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834759219,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834759331,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834759488,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834759514,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834759689,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834760076,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834762280,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834762298,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754834762468,
+      "tabId": 388342629,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    }
+  ]
+}

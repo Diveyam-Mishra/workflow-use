@@ -257,7 +257,23 @@ export default defineBackground(() => {
   // --- End Tab Event Listeners ---
 
   // --- Conversion Function ---
+  // List of hostnames to ignore during recording to reduce noise.
+  const BLOCKED_HOSTNAMES = new Set([
+    // General Ad & Tracking Domains
+    "doubleclick.net",
+    "googlesyndication.com",
+    "google-analytics.com",
+    "adservice.google.com",
+    "securepubads.g.doubleclick.net",
+    "s.amazon-adsystem.com",
+    "u.openx.net",
+    "google.com", // Often for reCAPTCHA iframes
 
+    // Social Media & Other common third-parties
+    "staticxx.facebook.com",
+    "connect.facebook.net",
+    "platform.twitter.com",
+  ]);
   // Time in ms to deduplicate click events. If two clicks on the same element
   // happen within this window, the second one is ignored.
   const CLICK_DEDUPLICATION_MS = 50;

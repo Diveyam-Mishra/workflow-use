@@ -1,0 +1,215 @@
+{
+  "name": "Recorded Workflow",
+  "description": "Recorded on 8/10/2025, 11:16:12 PM",
+  "version": "1.0.0",
+  "input_schema": [],
+  "steps": [
+    {
+      "type": "navigation",
+      "timestamp": 1754847944760,
+      "tabId": 388342629,
+      "frameId": 0,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "click",
+      "timestamp": 1754847963588,
+      "tabId": 388342629,
+      "frameId": 1265,
+      "url": "https://www.w3schools.com/",
+      "frameUrl": "https://www.w3schools.com/",
+      "xpath": "id(\"pagetop\")/a[2]",
+      "cssSelector": "a.tnb-menu-btn.w3-bar-item.w3-button.bar-item-hover.w3-padding-16.ga-top.ga-top-menu[href=\"javascript:void(0)\"][title=\"Menu\"][aria-label=\"Menu\"][role=\"button\"]",
+      "elementTag": "A",
+      "elementText": "Menu"
+    },
+    {
+      "type": "click",
+      "timestamp": 1754847965984,
+      "tabId": 388342629,
+      "frameId": 1265,
+      "url": "https://www.w3schools.com/",
+      "frameUrl": "https://www.w3schools.com/",
+      "xpath": "id(\"subtopnav\")/a[3]",
+      "cssSelector": "a.ga-nav[href=\"/js/default.asp\"][title*=\"JavaScript Tutorial\"]",
+      "elementTag": "A",
+      "elementText": "JAVASCRIPT"
+    },
+    {
+      "type": "click",
+      "timestamp": 1754847965984,
+      "tabId": 388342629,
+      "frameId": 1265,
+      "url": "https://www.w3schools.com/",
+      "frameUrl": "https://www.w3schools.com/",
+      "xpath": "id(\"subtopnav\")/a[3]",
+      "cssSelector": "a.ga-nav[href=\"/js/default.asp\"][title*=\"JavaScript Tutorial\"]",
+      "elementTag": "A",
+      "elementText": "JAVASCRIPT"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847966357,
+      "tabId": 388342629,
+      "frameId": 1296,
+      "url": "https://securepubads.g.doubleclick.net/static/topics/topics_frame.html"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847966358,
+      "tabId": 388342629,
+      "frameId": 1296,
+      "url": "https://securepubads.g.doubleclick.net/static/topics/topics_frame.html"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847967609,
+      "tabId": 388342629,
+      "frameId": 1265,
+      "url": "https://www.w3schools.com/js/default.asp"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847967652,
+      "tabId": 388342629,
+      "frameId": 1265,
+      "url": "https://www.w3schools.com/js/default.asp"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847967747,
+      "tabId": 388342629,
+      "frameId": 0,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847967755,
+      "tabId": 388342629,
+      "frameId": 0,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847968055,
+      "tabId": 388342629,
+      "frameId": 1303,
+      "url": "https://securepubads.g.doubleclick.net/static/topics/topics_frame.html"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847968057,
+      "tabId": 388342629,
+      "frameId": 1303,
+      "url": "https://securepubads.g.doubleclick.net/static/topics/topics_frame.html"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847969410,
+      "tabId": 388342629,
+      "frameId": 1265,
+      "url": "https://www.w3schools.com/css/default.asp"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847969452,
+      "tabId": 388342629,
+      "frameId": 1265,
+      "url": "https://www.w3schools.com/css/default.asp"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847969797,
+      "tabId": 388342629,
+      "frameId": 1310,
+      "url": "https://securepubads.g.doubleclick.net/static/topics/topics_frame.html"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847969798,
+      "tabId": 388342629,
+      "frameId": 1310,
+      "url": "https://securepubads.g.doubleclick.net/static/topics/topics_frame.html"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847969896,
+      "tabId": 388342629,
+      "frameId": 1265,
+      "url": "https://www.w3schools.com/html/default.asp"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847969949,
+      "tabId": 388342629,
+      "frameId": 1311,
+      "url": "https://cm.g.doubleclick.net/partnerpixels?gdpr=0&us_privacy=1---&url=https%3A%2F%2Fwww.w3schools.com%2Fhtml%2Fdefault.asp"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847969950,
+      "tabId": 388342629,
+      "frameId": 1311,
+      "url": "https://cm.g.doubleclick.net/partnerpixels?gdpr=0&us_privacy=1---&url=https%3A%2F%2Fwww.w3schools.com%2Fhtml%2Fdefault.asp"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847969957,
+      "tabId": 388342629,
+      "frameId": 1265,
+      "url": "https://www.w3schools.com/html/default.asp"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847971279,
+      "tabId": 388342629,
+      "frameId": 0,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847971289,
+      "tabId": 388342629,
+      "frameId": 0,
+      "url": "https://www.w3schools.com/tags/tryit.asp?filename=tryhtml_iframe"
+    },
+    {
+      "type": "click",
+      "timestamp": 1754847971299,
+      "tabId": 388342629,
+      "frameId": 1265,
+      "url": "https://www.w3schools.com/html/default.asp",
+      "frameUrl": "https://www.w3schools.com/html/default.asp",
+      "xpath": "id(\"subtopnav\")/a[2]",
+      "cssSelector": "a.ga-nav[href=\"/css/default.asp\"][title*=\"CSS Tutorial\"]",
+      "elementTag": "A",
+      "elementText": "CSS"
+    },
+    {
+      "type": "click",
+      "timestamp": 1754847971300,
+      "tabId": 388342629,
+      "frameId": 1265,
+      "url": "https://www.w3schools.com/html/default.asp",
+      "frameUrl": "https://www.w3schools.com/html/default.asp",
+      "xpath": "id(\"subtopnav\")/a[2]",
+      "cssSelector": "a.ga-nav[href=\"/css/default.asp\"][title*=\"CSS Tutorial\"]",
+      "elementTag": "A",
+      "elementText": "CSS"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847971920,
+      "tabId": 388342629,
+      "frameId": 1318,
+      "url": "https://securepubads.g.doubleclick.net/static/topics/topics_frame.html"
+    },
+    {
+      "type": "navigation",
+      "timestamp": 1754847971921,
+      "tabId": 388342629,
+      "frameId": 1318,
+      "url": "https://securepubads.g.doubleclick.net/static/topics/topics_frame.html"
+    }
+  ]
+}
