@@ -136,13 +136,13 @@ export default defineBackground(() => {
               (last as any).elementTag === (step as any).elementTag &&
               (last as any).elementText === (step as any).elementText;
             break;
-          case 'scroll':
-            isDuplicate =
-              last.tabId === step.tabId &&
-              (last as any).targetId === (step as any).targetId &&
-              (last as any).scrollX === (step as any).scrollX &&
-              (last as any).scrollY === (step as any).scrollY;
+          case 'scroll': {
+            const sameXY = (last as any).scrollX === (step as any).scrollX && (last as any).scrollY === (step as any).scrollY;
+            const sameUrl = (last as any).url === (step as any).url;
+            const nearTime = Math.abs(step.timestamp - last.timestamp) < 200;
+            isDuplicate = last.tabId === step.tabId && sameXY && sameUrl && nearTime;
             break;
+          }
           case 'key_press':
             isDuplicate =
               last.tabId === step.tabId &&
@@ -485,14 +485,21 @@ export default defineBackground(() => {
               y: number;
             }; // Type assertion for clarity
             const currentTabInfo = tabInfo[rrEvent.tabId]; // Get associated tab info for URL
-
+            // Drop internal chrome pages like chrome://newtab/
+            if (currentTabInfo?.url?.startsWith('chrome://')) {
+              break;
+            }
             // Check if the last step added was a mergeable scroll event
             const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
             if (
               lastStep &&
               lastStep.type === "scroll" &&
               lastStep.tabId === rrEvent.tabId &&
-              (lastStep as ScrollStep).targetId === scrollData.id
+              // Treat same XY within a short time window as duplicate, regardless of targetId
+              (lastStep as ScrollStep).scrollX === scrollData.x &&
+              (lastStep as ScrollStep).scrollY === scrollData.y &&
+              Math.abs(rrEvent.timestamp - lastStep.timestamp) < 200 &&
+              (lastStep as any).url === currentTabInfo?.url
             ) {
               // Update the last scroll step
               (lastStep as ScrollStep).scrollX = scrollData.x;
