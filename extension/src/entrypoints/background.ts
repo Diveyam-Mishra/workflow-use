@@ -220,6 +220,28 @@ export default defineBackground(() => {
 
   // --- Conversion Function ---
 
+  // List of hostnames to ignore during recording to reduce noise.
+  const BLOCKED_HOSTNAMES = new Set([
+    // General Ad & Tracking Domains
+    "doubleclick.net",
+    "googlesyndication.com",
+    "google-analytics.com",
+    "adservice.google.com",
+    "securepubads.g.doubleclick.net",
+    "s.amazon-adsystem.com",
+    "u.openx.net",
+    "google.com", // Often for reCAPTCHA iframes
+
+    // Social Media & Other common third-parties
+    "staticxx.facebook.com",
+    "connect.facebook.net",
+    "platform.twitter.com",
+  ]);
+
+  // Time in ms to deduplicate click events. If two clicks on the same element
+  // happen within this window, the second one is ignored.
+  const CLICK_DEDUPLICATION_MS = 50;
+
   function convertStoredEventsToSteps(events: StoredEvent[]): Step[] {
     const steps: Step[] = [];
 
@@ -234,6 +256,20 @@ export default defineBackground(() => {
             clickEvent.xpath &&
             clickEvent.elementTag
           ) {
+            // Deduplicate clicks on the same element within a short time window
+            const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
+            if (
+              lastStep &&
+              lastStep.type === "click" &&
+              lastStep.tabId === clickEvent.tabId &&
+              lastStep.frameId === clickEvent.frameId &&
+              (lastStep as ClickStep).xpath === clickEvent.xpath &&
+              clickEvent.timestamp - lastStep.timestamp < CLICK_DEDUPLICATION_MS
+            ) {
+              // Likely a duplicate event (e.g., from both mousedown and click), ignore it.
+              break;
+            }
+
             const step: ClickStep = {
               type: "click",
               timestamp: clickEvent.timestamp,
@@ -373,12 +409,47 @@ export default defineBackground(() => {
           } else if (rrEvent.type === EventType.Meta && rrEvent.data?.href) {
             // Also handle rrweb meta events as navigation
             const metaData = rrEvent.data as { href: string };
+            const url = metaData.href;
+
+            // 1. Filter out 'about:blank' navigations, which are common with iframes
+            if (url === "about:blank") {
+              break; // Skip this event entirely
+            }
+
+            // 2. Filter out navigations to blocked hostnames (ads, tracking, etc.)
+            try {
+              const hostname = new URL(url).hostname;
+              // Check against the blocklist (e.g., remove 'www.' for broader matching)
+              if (BLOCKED_HOSTNAMES.has(hostname.replace(/^www\./, ""))) {
+                // console.log(`Ignoring blocked navigation to: ${hostname}`);
+                break; // Skip this event
+              }
+            } catch (e) {
+              // If URL is invalid, it's not a real navigation, so we skip it.
+              // console.warn(`Could not parse URL for navigation event: ${url}`, e);
+              break;
+            }
+
+            // 3. Consolidate redundant navigation events
+            const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
+            if (
+              lastStep &&
+              lastStep.type === "navigation" &&
+              lastStep.tabId === rrEvent.tabId &&
+              lastStep.frameId === rrEvent.frameId &&
+              (lastStep as NavigationStep).url === url
+            ) {
+              // This is a duplicate navigation event for the same frame and URL.
+              // We can ignore it to keep the workflow clean.
+              break;
+            }
+
             const step: NavigationStep = {
               type: "navigation",
               timestamp: rrEvent.timestamp,
               tabId: rrEvent.tabId,
               frameId: rrEvent.frameId,
-              url: metaData.href,
+              url: url, // Use the sanitized URL
             };
             steps.push(step);
           }

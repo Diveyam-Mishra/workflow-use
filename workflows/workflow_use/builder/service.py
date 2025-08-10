@@ -4,6 +4,7 @@ import logging
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
+from urllib.parse import urlparse
 
 from langchain_core.exceptions import OutputParserException
 from langchain_core.language_models import BaseChatModel
@@ -137,6 +138,84 @@ class BuilderService:
 			logger.debug(f'Content attempted parsing:\n{content_to_parse}')
 			raise ValueError(f'LLM output could not be parsed into a valid Workflow schema. Error: {e}') from e
 
+	def _preprocess_and_clean_steps(self, steps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+		"""
+		Pre-processes and cleans a list of raw workflow steps to remove noise and redundancy.
+
+		This method applies a series of filters and consolidation logic to make the
+		input to the LLM cleaner and more focused on meaningful user actions.
+		"""
+		BLOCKED_HOSTNAMES = {
+			# General Ad & Tracking Domains
+			"doubleclick.net",
+			"googlesyndication.com",
+			"google-analytics.com",
+			"adservice.google.com",
+			"securepubads.g.doubleclick.net",
+			"s.amazon-adsystem.com",
+			"u.openx.net",
+			"google.com",  # Often for reCAPTCHA iframes
+			# Social Media & Other common third-parties
+			"staticxx.facebook.com",
+			"connect.facebook.net",
+			"platform.twitter.com",
+		}
+		CLICK_DEDUPLICATION_MS = 50
+
+		if not steps:
+			return []
+
+		# The input steps are Pydantic models, convert them to dicts for processing
+		dict_steps = [step.model_dump(mode='json', exclude_none=True) for step in steps]
+		cleaned_steps: List[Dict[str, Any]] = []
+
+		for step in dict_steps:
+			step_type = step.get('type')
+			last_step = cleaned_steps[-1] if cleaned_steps else None
+
+			# 1. Handle Navigation Steps
+			if step_type == 'navigation':
+				url = step.get('url', '')
+				# Filter out 'about:blank' and blocked hostnames
+				if url == 'about:blank':
+					continue
+				try:
+					hostname = urlparse(url).hostname
+					if hostname and hostname.replace('www.', '') in BLOCKED_HOSTNAMES:
+						continue
+				except Exception:
+					continue  # Ignore invalid URLs
+
+				# Consolidate redundant navigation events
+				if (
+					last_step
+					and last_step.get('type') == 'navigation'
+					and last_step.get('url') == url
+					and last_step.get('frameId') == step.get('frameId')
+				):
+					continue
+
+			# 2. Handle Click Steps
+			elif step_type == 'click':
+				# Deduplicate rapid, successive clicks
+				if (
+					last_step
+					and last_step.get('type') == 'click'
+					and last_step.get('xpath') == step.get('xpath')
+					and last_step.get('frameId') == step.get('frameId')
+					and (step.get('timestamp', 0) - last_step.get('timestamp', 0)) < CLICK_DEDUPLICATION_MS
+				):
+					continue
+
+			# If the step is valid, add it to the cleaned list
+			cleaned_steps.append(step)
+
+		# Convert back to Pydantic models before returning
+		# This part is tricky because the original list contained mixed types.
+		# For now, let's return dicts and handle model conversion in the caller if needed.
+		# The current implementation in build_workflow dumps models to dicts anyway.
+		return cleaned_steps
+
 	async def build_workflow(
 		self,
 		input_workflow: WorkflowDefinitionSchema,
@@ -165,6 +244,10 @@ class BuilderService:
 		if not input_workflow or not isinstance(input_workflow.steps, list):
 			raise ValueError('Invalid input_workflow object provided.')
 
+		# Pre-process and clean the raw steps to remove noise before sending to the LLM
+		cleaned_steps = self._preprocess_and_clean_steps(input_workflow.steps)
+		logger.info(f'Cleaned {len(input_workflow.steps)} raw steps down to {len(cleaned_steps)} steps.')
+
 		# Handle user goal
 		goal = user_goal
 		if goal is None:
@@ -185,23 +268,21 @@ class BuilderService:
 
 		# Integrate message preparation logic here
 		images_used = 0
-		for step in input_workflow.steps:
+		for step_dict in cleaned_steps:
 			step_messages: List[Dict[str, Any]] = []  # Messages for this specific step
 
 			# 1. Text representation (JSON dump)
-			step_dict = step.model_dump(mode='json', exclude_none=True)
-			screenshot_data = step_dict.pop('screenshot', None)  # Pop potential screenshot
+			# The step is already a dictionary from the cleaning function
+			screenshot_data = step_dict.pop('screenshot', None)
 			step_messages.append({'type': 'text', 'text': json.dumps(step_dict, indent=2)})
 
 			# 2. Optional screenshot
 			attach_image = use_screenshots and images_used < max_images
-			step_type = getattr(step, 'type', step_dict.get('type'))
+			step_type = step_dict.get('type')
 
 			if attach_image and step_type != 'input':  # Don't attach for inputs
-				# Re-retrieve screenshot data if it wasn't popped (e.g., nested under 'data')
-				# This assumes screenshot might still be in the original step model or dict
-				# A bit redundant, ideally screenshot handling is consistent
-				screenshot = screenshot_data or getattr(step, 'screenshot', None) or step_dict.get('data', {}).get('screenshot')
+				# The screenshot was already popped, so we just use it if it exists
+				screenshot = screenshot_data
 
 				if screenshot:
 					if isinstance(screenshot, str) and screenshot.startswith('data:'):
