@@ -79,12 +79,71 @@ export default defineBackground(() => {
   // Function to broadcast workflow data updates to the console bus
   async function broadcastWorkflowDataUpdate(): Promise<Workflow> {
     // console.log("[DEBUG] broadcastWorkflowDataUpdate: Entered function"); // Optional: Keep for debugging
-    const allSteps: Step[] = Object.keys(sessionLogs)
+    const rawSteps: Step[] = Object.keys(sessionLogs)
       .flatMap((tabIdStr) => {
         const tabId = parseInt(tabIdStr, 10);
         return convertStoredEventsToSteps(sessionLogs[tabId] || []);
       })
       .sort((a, b) => a.timestamp - b.timestamp); // Sort chronologically
+
+    // Post-process to collapse consecutive duplicates that only differ by timestamp (e.g. repeated identical navigations)
+    const allSteps: Step[] = [];
+    for (const step of rawSteps) {
+      const last = allSteps.length ? allSteps[allSteps.length - 1] : null;
+      if (!last) {
+        allSteps.push(step);
+        continue;
+      }
+      let isDuplicate = false;
+      if (last.type === step.type) {
+        switch (step.type) {
+          case 'navigation':
+            isDuplicate = (last as NavigationStep).url === (step as NavigationStep).url && last.tabId === step.tabId;
+            break;
+          case 'input':
+            isDuplicate =
+              last.tabId === step.tabId &&
+              (last as any).url === (step as any).url &&
+              (last as any).frameUrl === (step as any).frameUrl &&
+              (last as any).xpath === (step as any).xpath &&
+              (last as any).elementTag === (step as any).elementTag &&
+              (last as any).value === (step as any).value;
+            break;
+          case 'click':
+            isDuplicate =
+              last.tabId === step.tabId &&
+              (last as any).url === (step as any).url &&
+              (last as any).frameUrl === (step as any).frameUrl &&
+              (last as any).xpath === (step as any).xpath &&
+              (last as any).elementTag === (step as any).elementTag &&
+              (last as any).elementText === (step as any).elementText;
+            break;
+          case 'scroll':
+            isDuplicate =
+              last.tabId === step.tabId &&
+              (last as any).targetId === (step as any).targetId &&
+              (last as any).scrollX === (step as any).scrollX &&
+              (last as any).scrollY === (step as any).scrollY;
+            break;
+          case 'key_press':
+            isDuplicate =
+              last.tabId === step.tabId &&
+              (last as any).url === (step as any).url &&
+              (last as any).key === (step as any).key &&
+              (last as any).xpath === (step as any).xpath;
+            break;
+        }
+      }
+      if (isDuplicate) {
+        // Update timestamp (and screenshot if present) to most recent but don't add new step
+        last.timestamp = step.timestamp;
+        if ((step as any).screenshot) {
+          (last as any).screenshot = (step as any).screenshot;
+        }
+      } else {
+        allSteps.push(step);
+      }
+    }
 
     // Create the workflowData object *after* sorting steps, but hash only steps
     const workflowData: Workflow = {
@@ -344,19 +403,22 @@ export default defineBackground(() => {
               lastInputPerKey[key] = { idx: steps.length - 1, ts: nowTs, value: (inputEvent as any).value };
             }
           } else {
-            console.warn("Skipping incomplete CUSTOM_INPUT_EVENT", inputEvent);
+            console.warn("Skipping incomplete CUSTOM_INPUT_EVENT:", inputEvent);
           }
           break;
         }
+
         case "CUSTOM_KEY_EVENT": {
           const keyEvent = event as StoredCustomKeyEvent;
+          // Key press might not always have a target element (xpath, etc.)
+          // but needs at least url and key
           if (keyEvent.url && keyEvent.key) {
             const step: KeyPressStep = {
               type: "key_press",
               timestamp: keyEvent.timestamp,
               tabId: keyEvent.tabId,
               url: keyEvent.url,
-              frameUrl: keyEvent.frameUrl,
+              frameUrl: keyEvent.frameUrl, // Can be missing
               key: keyEvent.key,
               xpath: keyEvent.xpath,
               cssSelector: keyEvent.cssSelector,
@@ -365,56 +427,77 @@ export default defineBackground(() => {
             };
             steps.push(step);
           } else {
-            console.warn("Skipping incomplete CUSTOM_KEY_EVENT", keyEvent);
+            console.warn("Skipping incomplete CUSTOM_KEY_EVENT:", keyEvent);
           }
           break;
         }
+
         case "RRWEB_EVENT": {
+          // We only care about scroll events from rrweb for now
           const rrEvent = event as StoredRrwebEvent;
+          if (
+            rrEvent.type === EventType.IncrementalSnapshot &&
+            rrEvent.data.source === IncrementalSource.Scroll
+          ) {
+            const scrollData = rrEvent.data as {
+              id: number;
+              x: number;
+              y: number;
+            }; // Type assertion for clarity
+            const currentTabInfo = tabInfo[rrEvent.tabId]; // Get associated tab info for URL
+
+            // Check if the last step added was a mergeable scroll event
+            const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
             if (
-              rrEvent.type === EventType.IncrementalSnapshot &&
-              rrEvent.data.source === IncrementalSource.Scroll
+              lastStep &&
+              lastStep.type === "scroll" &&
+              lastStep.tabId === rrEvent.tabId &&
+              (lastStep as ScrollStep).targetId === scrollData.id
             ) {
-              const scrollData = rrEvent.data as { id: number; x: number; y: number };
-              const currentTabInfo = tabInfo[rrEvent.tabId];
-              const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
-              if (
-                lastStep &&
-                lastStep.type === "scroll" &&
-                lastStep.tabId === rrEvent.tabId &&
-                (lastStep as ScrollStep).targetId === scrollData.id
-              ) {
-                (lastStep as ScrollStep).scrollX = scrollData.x;
-                (lastStep as ScrollStep).scrollY = scrollData.y;
-                lastStep.timestamp = rrEvent.timestamp;
-              } else {
-                const scrollStep: ScrollStep = {
-                  type: "scroll",
-                  timestamp: rrEvent.timestamp,
-                  tabId: rrEvent.tabId,
-                  targetId: scrollData.id,
-                  scrollX: scrollData.x,
-                  scrollY: scrollData.y,
-                  url: currentTabInfo?.url,
-                };
-                steps.push(scrollStep);
-              }
-            } else if (rrEvent.type === EventType.Meta && rrEvent.data?.href) {
-              const metaData = rrEvent.data as { href: string };
-              const nav: NavigationStep = {
-                type: "navigation",
+              // Update the last scroll step
+              (lastStep as ScrollStep).scrollX = scrollData.x;
+              (lastStep as ScrollStep).scrollY = scrollData.y;
+              lastStep.timestamp = rrEvent.timestamp; // Update to latest timestamp
+              // URL should already be set from the first event in the sequence
+            } else {
+              // Add a new scroll step
+              const newStep: ScrollStep = {
+                type: "scroll",
                 timestamp: rrEvent.timestamp,
                 tabId: rrEvent.tabId,
-                url: metaData.href,
+                targetId: scrollData.id,
+                scrollX: scrollData.x,
+                scrollY: scrollData.y,
+                url: currentTabInfo?.url, // Add URL if available
               };
-              steps.push(nav);
+              steps.push(newStep);
             }
+          } else if (rrEvent.type === EventType.Meta && rrEvent.data?.href) {
+            // Also handle rrweb meta events as navigation
+            const metaData = rrEvent.data as { href: string };
+            const step: NavigationStep = {
+              type: "navigation",
+              timestamp: rrEvent.timestamp,
+              tabId: rrEvent.tabId,
+              url: metaData.href,
+            };
+            steps.push(step);
+          }
           break;
         }
+
+        // Add cases for other StoredEvent types to Step types if needed
+        // e.g., CUSTOM_SELECT_EVENT -> SelectStep
+        // e.g., CUSTOM_TAB_CREATED -> TabCreatedStep
+        // RRWEB_EVENT type 4 (Meta) or 3 (FullSnapshot) could potentially map to NavigationStep if needed.
+
         default:
+          // Ignore other event types for now
+          // console.log("Ignoring event type:", event.messageType);
           break;
       }
     }
+
     return steps;
   }
 
