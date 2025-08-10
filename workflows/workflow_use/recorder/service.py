@@ -85,7 +85,32 @@ class RecordingService:
 		async with self.final_workflow_processed_lock:
 			if not self.final_workflow_processed_flag and self.last_workflow_update_event:
 				print(f'[Service] Capturing final workflow (Trigger: {trigger_reason}).')
-				self.final_workflow_output = self.last_workflow_update_event.payload
+				wf = self.last_workflow_update_event.payload
+				# Backend safety filter: drop about:blank and obvious ad/analytics iframe navigations
+				try:
+					clean_steps = []
+					for s in wf.steps:
+						st = getattr(s, 'type', None) or (s.get('type') if isinstance(s, dict) else None)
+						url = getattr(s, 'url', None) or (s.get('url') if isinstance(s, dict) else None)
+						if st == 'navigation':
+							if not url or url == 'about:blank':
+								continue
+							from urllib.parse import urlparse
+							host = urlparse(url).hostname or ''
+							blocked = any(
+								pat in host for pat in (
+									'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
+									'amazon-adsystem.com', '2mdn.net', 'recaptcha.google.com', 'recaptcha.net',
+									'googletagmanager.com', 'indexww.com', 'adtrafficquality.google'
+								)
+							)
+							if blocked:
+								continue
+						clean_steps.append(s)
+					wf.steps = clean_steps
+				except Exception as e:
+					print(f'[Service] Backend filter failed: {e}')
+				self.final_workflow_output = wf
 				self.final_workflow_processed_flag = True
 				processed_this_call = True
 

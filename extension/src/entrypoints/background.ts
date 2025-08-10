@@ -39,6 +39,24 @@ export default defineBackground(() => {
   // Content scripts will send a PREPARE_NEW_TAB signal; we keep timestamp to correlate
   // shortly following chrome.tabs.onCreated events so we can mark those tabs as user initiated.
   const recentNewTabIntents: { [openerTabId: number]: number } = {};
+  // Record iframe URLs that the user actually interacted with (via custom events) per tab
+  const interactedFrameUrls: Record<number, Set<string>> = {};
+  // Additionally track last interaction time per frame for time-window gating
+  const interactedFrameTimes: Record<number, Record<string, number>> = {};
+  // Hostname patterns for iframe navigation noise we want to suppress
+  const BLOCKED_IFRAME_HOST_PATTERNS: RegExp[] = [
+    /doubleclick\.net$/i,
+    /googlesyndication\.com$/i,
+    /googleadservices\.com$/i,
+    /amazon-adsystem\.com$/i,
+    /recaptcha\.google\.com$/i,
+    /recaptcha\.net$/i,
+    /googletagmanager\.com$/i,
+    /indexww\.com$/i,
+    /adtrafficquality\.google$/i,
+    /2mdn\.net$/i,
+    /gstaticadssl\.googleapis\.com$/i,
+  ];
 
   // Heuristic window (ms) within which a created tab following a user intent is considered relevant.
   const NEW_TAB_INTENT_WINDOW_MS = 4000;
@@ -301,6 +319,25 @@ export default defineBackground(() => {
 
   // --- Conversion Function ---
 
+  const DEFAULT_SETTINGS = {
+    enableIframes: true as boolean,
+    iframeWindow: 3000 as number,
+    blocklist: [
+      'doubleclick.net','googlesyndication.com','googleadservices.com',
+      'amazon-adsystem.com','2mdn.net','recaptcha.google.com','recaptcha.net',
+      'googletagmanager.com','indexww.com','adtrafficquality.google'
+    ] as string[],
+    allowlist: [] as string[],
+  };
+  let settings: { enableIframes: boolean; iframeWindow: number; blocklist: string[]; allowlist: string[] } = { ...DEFAULT_SETTINGS };
+  chrome.storage.sync.get(DEFAULT_SETTINGS, (s: any) => { settings = { ...settings, ...s }; });
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'sync') return;
+    const next = { ...settings } as any;
+    for (const k of Object.keys(changes)) (next as any)[k] = (changes as any)[k].newValue;
+    settings = next;
+  });
+
   function convertStoredEventsToSteps(events: StoredEvent[]): Step[] {
     const steps: Step[] = [];
     const lastNavigationIndexByTab: Record<number, number> = {};
@@ -347,6 +384,7 @@ export default defineBackground(() => {
               tabId: click.tabId,
               url: click.url,
               frameUrl: click.frameUrl,
+              frameIdPath: (click as any).frameIdPath,
               xpath: click.xpath,
               cssSelector: click.cssSelector,
               elementTag: click.elementTag,
@@ -393,6 +431,7 @@ export default defineBackground(() => {
                 tabId: inputEvent.tabId,
                 url: inputEvent.url,
                 frameUrl: inputEvent.frameUrl,
+                frameIdPath: (inputEvent as any).frameIdPath,
                 xpath: inputEvent.xpath,
                 cssSelector: inputEvent.cssSelector,
                 elementTag: inputEvent.elementTag,
@@ -419,6 +458,7 @@ export default defineBackground(() => {
               tabId: keyEvent.tabId,
               url: keyEvent.url,
               frameUrl: keyEvent.frameUrl, // Can be missing
+              frameIdPath: (keyEvent as any).frameIdPath,
               key: keyEvent.key,
               xpath: keyEvent.xpath,
               cssSelector: keyEvent.cssSelector,
@@ -475,11 +515,43 @@ export default defineBackground(() => {
           } else if (rrEvent.type === EventType.Meta && rrEvent.data?.href) {
             // Also handle rrweb meta events as navigation
             const metaData = rrEvent.data as { href: string };
+            const href = metaData.href;
+            // Drop about:blank always
+            if (href === 'about:blank') {
+              break;
+            }
+            try {
+              const urlObj = new URL(href);
+              const host = urlObj.hostname;
+              // Allowlist overrides blocklist
+              const inAllow = settings.allowlist.some(d => host.endsWith(d));
+              const inBlock = settings.blocklist.some(d => host.endsWith(d));
+              if (!inAllow && inBlock) {
+                break;
+              }
+              if (!settings.enableIframes && !(rrEvent as any).isTopFrame) {
+                break; // user disabled iframe recording
+              }
+              // If top frame, allow
+              if ((rrEvent as any).isTopFrame) {
+                // allowed
+              } else {
+                const fUrl = (rrEvent as any).frameUrl as string | undefined;
+                if (!fUrl) break;
+                const times = interactedFrameTimes[rrEvent.tabId] || {};
+                const lastTs = times[fUrl];
+                if (!lastTs) break;
+                if (Date.now() - lastTs > settings.iframeWindow) break;
+              }
+            } catch {
+              break;
+            }
             const step: NavigationStep = {
               type: "navigation",
               timestamp: rrEvent.timestamp,
               tabId: rrEvent.tabId,
               url: metaData.href,
+              // frameIdPath could be attached if needed
             };
             steps.push(step);
           }
@@ -559,6 +631,13 @@ export default defineBackground(() => {
           screenshot: screenshotDataUrl,
         };
         sessionLogs[tabId].push(eventWithMeta);
+        // Mark frame as interacted so subsequent iframe meta navigations can be allowed
+        if (message.type.startsWith("CUSTOM_") && eventPayload.frameUrl) {
+          if (!interactedFrameUrls[tabId]) interactedFrameUrls[tabId] = new Set();
+          interactedFrameUrls[tabId].add(eventPayload.frameUrl);
+          if (!interactedFrameTimes[tabId]) interactedFrameTimes[tabId] = {};
+          interactedFrameTimes[tabId][eventPayload.frameUrl] = Date.now();
+        }
         broadcastWorkflowDataUpdate(); // Call is async, will not block
         // console.log(`Stored ${message.type} from tab ${tabId}`);
       };

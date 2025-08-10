@@ -27,12 +27,14 @@ export interface NavigationStep extends BaseStep {
   type: "navigation";
   url: string; // Navigation implies a URL change
   screenshot?: string; // Optional in source
+  frameIdPath?: string; // Optional frame context
 }
 
 export interface ClickStep extends BaseStep {
   type: "click";
   url: string;
   frameUrl: string;
+  frameIdPath?: string;
   xpath: string;
   cssSelector?: string; // Optional in source
   elementTag: string;
@@ -44,6 +46,7 @@ export interface InputStep extends BaseStep {
   type: "input";
   url: string;
   frameUrl: string;
+  frameIdPath?: string;
   xpath: string;
   cssSelector?: string; // Optional in source
   elementTag: string;
@@ -55,6 +58,7 @@ export interface KeyPressStep extends BaseStep {
   type: "key_press";
   url?: string; // Can be missing if key press happens without element focus? Source is optional.
   frameUrl?: string; // Might be missing
+  frameIdPath?: string;
   key: string;
   xpath?: string; // Optional in source
   cssSelector?: string; // Optional in source
@@ -67,6 +71,7 @@ export interface ScrollStep extends BaseStep {
   targetId: number; // The rrweb ID of the element being scrolled
   scrollX: number;
   scrollY: number;
+  frameIdPath?: string;
   // Note: url might be missing if scroll happens on initial load before meta event?
 }
 

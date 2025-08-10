@@ -122,6 +122,16 @@ function startRecorder() {
     emit(event) {
       if (!isRecordingActive) return;
 
+      const frameUrl = window.location.href;
+      const isTopFrame = window.self === window.top;
+      const frameIdPath = (() => {
+        try {
+          let win: any = window; const parts: number[] = [];
+          while (win !== win.parent) { const parent = win.parent; let idx=0; for (let i=0;i<parent.frames.length;i++){ if(parent.frames[i]===win){idx=i;break;} } parts.unshift(idx); win=parent; if(parts.length>10) break; }
+          return parts.length ? parts.join('.') : '0';
+        } catch { return '0'; }
+      })();
+
       // Handle scroll events with debouncing and direction detection
       if (
         event.type === EventType.IncrementalSnapshot &&
@@ -157,7 +167,10 @@ function startRecorder() {
             type: "RRWEB_EVENT",
             payload: {
               ...event,
-              data: roundedScrollData, // Use rounded coordinates
+              data: roundedScrollData,
+              frameUrl,
+              frameIdPath,
+              isTopFrame,
             },
           });
           lastDirection = currentDirection;
@@ -178,15 +191,18 @@ function startRecorder() {
             type: "RRWEB_EVENT",
             payload: {
               ...event,
-              data: roundedScrollData, // Use rounded coordinates
+              data: roundedScrollData,
+              frameUrl,
+              frameIdPath,
+              isTopFrame,
             },
           });
           scrollTimeout = null;
           lastDirection = null; // Reset direction for next scroll
         }, DEBOUNCE_MS);
       } else {
-        // Pass through non-scroll events unchanged
-        chrome.runtime.sendMessage({ type: "RRWEB_EVENT", payload: event });
+        // Pass through non-scroll events unchanged, but include frame context for filtering in background
+        chrome.runtime.sendMessage({ type: "RRWEB_EVENT", payload: { ...event, frameUrl, frameIdPath, isTopFrame } });
       }
     },
     maskInputOptions: {
@@ -239,45 +255,38 @@ function handleCustomClick(event: MouseEvent) {
   if (!isRecordingActive) return;
   const targetElement = event.target as HTMLElement;
   if (!targetElement) return;
-
-  try {
-    // Detect if this click is likely to open a new tab so background can correlate upcoming tab creation.
-    // Heuristics: modifier key (Ctrl/Cmd / middle button) OR anchor with target=_blank / rel noopener.
-    const isMiddle = event.button === 1;
-    const isModifier = event.metaKey || event.ctrlKey; // Cmd (mac) or Ctrl (win/linux)
-    let anchorOpensNew = false;
-    if (targetElement instanceof HTMLAnchorElement) {
-      const a = targetElement as HTMLAnchorElement;
-      anchorOpensNew =
-        (a.target && a.target.toLowerCase() === "_blank") ||
-        a.rel.split(/\s+/).some((r) => r.toLowerCase() === "noopener" || r.toLowerCase() === "noreferrer");
-    }
-    if (isMiddle || isModifier || anchorOpensNew) {
-      chrome.runtime.sendMessage({ type: "PREPARE_NEW_TAB", payload: { reason: "potential_new_tab_click" } });
-    }
-  } catch (e) {
-    console.warn("Failed to evaluate new tab heuristic", e);
-  }
-
+  // Determine a frame identifier (best-effort). Top frame = 0, nested frames build path.
+  const frameIdPath = (() => {
+    try {
+      let win: any = window;
+      const parts: number[] = [];
+      while (win !== win.parent) {
+        const parent = win.parent;
+        let index = 0;
+        for (let i = 0; i < parent.frames.length; i++) {
+          if (parent.frames[i] === win) { index = i; break; }
+        }
+        parts.unshift(index);
+        win = parent;
+        if (parts.length > 10) break; // safety
+      }
+      return parts.length ? parts.join('.') : '0';
+    } catch { return '0'; }
+  })();
   try {
     const xpath = getXPath(targetElement);
     const clickData = {
       timestamp: Date.now(),
-      url: document.location.href, // Use document.location for main page URL
-      frameUrl: window.location.href, // URL of the frame where the event occurred
-      xpath: xpath,
+      url: document.location.href,
+      frameUrl: window.location.href,
+      frameIdPath,
+      xpath,
       cssSelector: getEnhancedCSSSelector(targetElement, xpath),
       elementTag: targetElement.tagName,
       elementText: targetElement.textContent?.trim().slice(0, 200) || "",
     };
-    console.log("Sending CUSTOM_CLICK_EVENT:", clickData);
-    chrome.runtime.sendMessage({
-      type: "CUSTOM_CLICK_EVENT",
-      payload: clickData,
-    });
-  } catch (error) {
-    console.error("Error capturing click data:", error);
-  }
+    chrome.runtime.sendMessage({ type: "CUSTOM_CLICK_EVENT", payload: clickData });
+  } catch (error) { console.error("Error capturing click data:", error); }
 }
 // --- End Custom Click Handler ---
 
@@ -293,12 +302,20 @@ function handleInput(event: Event) {
   // Ignore programmatic (non user-trusted) input events – these often cause massive duplication
   if (!(event as InputEvent).isTrusted) return;
 
+  const frameIdPath = (() => {
+    try {
+      let win: any = window; const parts: number[] = [];
+      while (win !== win.parent) { const parent = win.parent; let idx=0; for (let i=0;i<parent.frames.length;i++){ if(parent.frames[i]===win){idx=i;break;} } parts.unshift(idx); win=parent; if(parts.length>10) break; }
+      return parts.length ? parts.join('.') : '0';
+    } catch { return '0'; }
+  })();
   try {
     const xpath = getXPath(targetElement);
     const inputData = {
       timestamp: Date.now(),
       url: document.location.href,
       frameUrl: window.location.href,
+      frameIdPath,
       xpath: xpath,
       cssSelector: getEnhancedCSSSelector(targetElement, xpath),
       elementTag: targetElement.tagName,
@@ -341,6 +358,7 @@ function handleSelectChange(event: Event) {
   const targetElement = event.target as HTMLSelectElement;
   // Ensure it's a select element
   if (!targetElement || targetElement.tagName !== "SELECT") return;
+  const frameIdPath = (() => { try { let win:any=window; const parts:number[]=[]; while(win!==win.parent){const parent=win.parent; let idx=0; for(let i=0;i<parent.frames.length;i++){ if(parent.frames[i]===win){idx=i;break;} } parts.unshift(idx); win=parent; if(parts.length>10) break;} return parts.length?parts.join('.'):'0'; } catch { return '0'; } })();
 
   try {
     const xpath = getXPath(targetElement);
@@ -349,6 +367,7 @@ function handleSelectChange(event: Event) {
       timestamp: Date.now(),
       url: document.location.href,
       frameUrl: window.location.href,
+      frameIdPath,
       xpath: xpath,
       cssSelector: getEnhancedCSSSelector(targetElement, xpath),
       elementTag: targetElement.tagName,
@@ -421,11 +440,13 @@ function handleKeydown(event: KeyboardEvent) {
       }
     }
 
+    const frameIdPath = (() => { try { let win:any=window; const parts:number[]=[]; while(win!==win.parent){const parent=win.parent; let idx=0; for(let i=0;i<parent.frames.length;i++){ if(parent.frames[i]===win){idx=i;break;} } parts.unshift(idx); win=parent; if(parts.length>10) break;} return parts.length?parts.join('.'):'0'; } catch { return '0'; } })();
     try {
       const keyData = {
         timestamp: Date.now(),
         url: document.location.href,
         frameUrl: window.location.href,
+        frameIdPath,
         key: keyToLog, // The key or combination pressed
         xpath: xpath, // XPath of the element in focus (if any)
         cssSelector: cssSelector, // CSS selector of the element in focus (if any)
@@ -588,6 +609,9 @@ function handleBlur(event: FocusEvent) {
 
 export default defineContentScript({
   matches: ["<all_urls>"],
+  // Ensure injection into all frames (iframes) so we can capture interactions inside nested documents.
+  allFrames: true,
+  matchAboutBlank: true,
   main(ctx) {
     // Listener for status updates from the background script
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
