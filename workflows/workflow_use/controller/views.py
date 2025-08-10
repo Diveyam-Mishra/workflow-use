@@ -79,3 +79,29 @@ class PageExtractionAction(_BaseExtra):
 
 	type: Literal['extract_page_content']
 	goal: str
+
+
+# ---------------- Assertion Actions (new) ----------------
+
+class AssertElementExistsAction(_BaseExtra):
+	"""Assert that an element located by a CSS selector exists on the current page."""
+
+	type: Literal['assert_element_exists']
+	cssSelector: str
+	timeoutMs: Optional[int] = 2000
+
+
+class AssertTextContainsAction(_BaseExtra):
+	"""Assert that the page (or a specific element) contains the expected text substring."""
+
+	type: Literal['assert_text_contains']
+	expected: str
+	cssSelector: Optional[str] = None  # If provided, scope the text search to this element
+	timeoutMs: Optional[int] = 2000
+
+
+class AssertUrlContainsAction(_BaseExtra):
+	"""Assert that the current page URL contains a given substring."""
+
+	type: Literal['assert_url_contains']
+	expected: str

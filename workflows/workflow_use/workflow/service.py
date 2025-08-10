@@ -265,15 +265,17 @@ class Workflow:
 		String placeholders are written using Python format syntax, e.g. "{index}".
 		"""
 		if isinstance(data, str):
+			# Fast path: skip formatting for common selector patterns that frequently contain braces (e.g., attribute selectors)
+			if any(sym in data for sym in ['::', ':hover', ':nth-child']) or data.strip().startswith(('.', '#')):
+				return data
+			# Guard against accidental formatting when braces are unbalanced
+			if data.count('{') != data.count('}'):
+				return data
 			try:
-				# Only attempt to format if placeholder syntax is likely present
 				if '{' in data and '}' in data:
-					formatted_data = data.format(**self.context)
-					return formatted_data
-				return data  # No placeholders, return as is
+					return data.format(**self.context)
+				return data
 			except KeyError:
-				# A key in the placeholder was not found in the context.
-				# Return the original string as per previous behavior.
 				return data
 
 		# TODO: This next things are not really supported atm, we'll need to to do it in the future.

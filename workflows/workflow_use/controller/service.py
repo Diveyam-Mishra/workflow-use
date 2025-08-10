@@ -16,6 +16,9 @@ from workflow_use.controller.views import (
 	PageExtractionAction,
 	ScrollDeterministicAction,
 	SelectDropdownOptionDeterministicAction,
+	AssertElementExistsAction,
+	AssertTextContainsAction,
+	AssertUrlContainsAction,
 )
 
 logger = logging.getLogger(__name__)
@@ -239,3 +242,53 @@ class WorkflowController(Controller):
 				msg = f'📄  Extracted from page\n: {content}\n'
 				logger.info(msg)
 				return ActionResult(extracted_content=msg)
+
+		# ---------------- Assertions ----------------
+		@self.registry.action('Assert element exists on page', param_model=AssertElementExistsAction)
+		async def assert_element_exists(params: AssertElementExistsAction, browser_session: Browser) -> ActionResult:
+			page = await browser_session.get_current_page()
+			try:
+				await page.wait_for_selector(params.cssSelector, timeout=params.timeoutMs)
+				msg = f'✅ AssertElementExists passed: {params.cssSelector}'
+				logger.info(msg)
+				return ActionResult(extracted_content=msg, include_in_memory=True)
+			except Exception as e:
+				msg = f'❌ AssertElementExists failed: {params.cssSelector} ({e})'
+				logger.error(msg)
+				return ActionResult(error=msg, extracted_content=msg, include_in_memory=True)
+
+		@self.registry.action('Assert text contains expected value', param_model=AssertTextContainsAction)
+		async def assert_text_contains(params: AssertTextContainsAction, browser_session: Browser) -> ActionResult:
+			page = await browser_session.get_current_page()
+			try:
+				if params.cssSelector:
+					locator = page.locator(params.cssSelector)
+					await locator.wait_for(timeout=params.timeoutMs)
+					content = await locator.inner_text()
+				else:
+					content = await page.content()
+				if params.expected in content:
+					msg = f'✅ AssertTextContains passed: "{params.expected}"'
+					logger.info(msg)
+					return ActionResult(extracted_content=msg, include_in_memory=True)
+				else:
+					msg = f'❌ AssertTextContains failed: "{params.expected}" not found'
+					logger.error(msg)
+					return ActionResult(error=msg, extracted_content=msg, include_in_memory=True)
+			except Exception as e:
+				msg = f'❌ AssertTextContains error: {e}'
+				logger.error(msg)
+				return ActionResult(error=msg, extracted_content=msg, include_in_memory=True)
+
+		@self.registry.action('Assert current URL contains expected substring', param_model=AssertUrlContainsAction)
+		async def assert_url_contains(params: AssertUrlContainsAction, browser_session: Browser) -> ActionResult:
+			page = await browser_session.get_current_page()
+			current = page.url
+			if params.expected in current:
+				msg = f'✅ AssertUrlContains passed: "{params.expected}" in {current}'
+				logger.info(msg)
+				return ActionResult(extracted_content=msg, include_in_memory=True)
+			else:
+				msg = f'❌ AssertUrlContains failed: "{params.expected}" not in {current}'
+				logger.error(msg)
+				return ActionResult(error=msg, extracted_content=msg, include_in_memory=True)

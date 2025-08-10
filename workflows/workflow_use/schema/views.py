@@ -95,6 +95,26 @@ class PageExtractionStep(TimestampedWorkflowStep):
 	goal: str = Field(..., description='The goal of the page extraction.')
 
 
+# --- Assertion Steps (new) ---
+
+class AssertElementExistsStep(TimestampedWorkflowStep):
+	type: Literal['assert_element_exists']
+	cssSelector: str = Field(..., description='CSS selector for element to assert existence.')
+	timeoutMs: int | None = Field(2000, description='Wait timeout in ms.')
+
+
+class AssertTextContainsStep(TimestampedWorkflowStep):
+	type: Literal['assert_text_contains']
+	expected: str = Field(..., description='Substring expected.')
+	cssSelector: str | None = Field(None, description='Optional CSS selector to scope text search.')
+	timeoutMs: int | None = Field(2000, description='Wait timeout in ms.')
+
+
+class AssertUrlContainsStep(TimestampedWorkflowStep):
+	type: Literal['assert_url_contains']
+	expected: str = Field(..., description='Expected substring in current URL.')
+
+
 # --- Union of all possible step types ---
 # This Union defines what constitutes a valid step in the "steps" list.
 DeterministicWorkflowStep = Union[
@@ -105,6 +125,9 @@ DeterministicWorkflowStep = Union[
 	KeyPressStep,
 	ScrollStep,
 	PageExtractionStep,
+	AssertElementExistsStep,
+	AssertTextContainsStep,
+	AssertUrlContainsStep,
 ]
 
 AgenticWorkflowStep = AgentTaskWorkflowStep
