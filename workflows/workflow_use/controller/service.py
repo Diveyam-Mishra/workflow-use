@@ -88,50 +88,96 @@ class WorkflowController(Controller):
 				try:
 					from playwright.async_api import Page, Frame
 					ctx: Page | Frame = pg
-					if getattr(params, 'frameIdPath', None):
-						parts = [p for p in str(params.frameIdPath).split('.') if p != '0' and p != '']
+					# If frame hints point to top document, stay on page
+					fid = getattr(params, 'frameIdPath', None)
+					furl = getattr(params, 'frameUrl', None)
+					curr_url = (pg.url or '').split('#')[0] if hasattr(pg, 'url') else ''
+					if furl and curr_url and furl.split('#')[0] == curr_url:
+						return pg
+					if fid:
+						segs = [s for s in str(fid).split('.') if s != '']
+						if all(s == '0' for s in segs):
+							return pg
 						f = pg.main_frame
-						for seg in parts:
-							idx = int(seg)
-							if idx < len(f.child_frames):
+						for s in segs[1:]:  # skip top marker
+							idx = int(s)
+							if 0 <= idx < len(f.child_frames):
 								f = f.child_frames[idx]
 							else:
-								return ctx
-						ctx = f
-					elif getattr(params, 'frameUrl', None):
+								return pg
+						return f
+					if furl:
 						from urllib.parse import urlparse
-						pf = urlparse(params.frameUrl)
+						pf = urlparse(furl)
+						# If frameUrl equals current page URL (origin+path), stay on page
+						try:
+							from urllib.parse import urlparse as _u
+							cu = _u(curr_url)
+							if (cu.scheme, cu.netloc, cu.path) == (pf.scheme, pf.netloc, pf.path):
+								return pg
+						except Exception:
+							pass
 						for fr in pg.frames:
 							try:
 								ff = urlparse(fr.url)
-								# Match origin, and allow target frameUrl to be a prefix of full URL
-								if (ff.scheme, ff.netloc) == (pf.scheme, pf.netloc) and fr.url.startswith(params.frameUrl):
-									ctx = fr
-									break
+								if (ff.scheme, ff.netloc) == (pf.scheme, pf.netloc) and fr.url.startswith(furl):
+									return fr
 							except Exception:
 								continue
 				except Exception:
-					ctx = pg
+					return pg
 				return ctx
 
+			# Fallback: search all frames for selector (prefer frames matching target origin)
+			async def _find_in_frames(pg, selector: str):
+				from urllib.parse import urlparse
+				prefer = getattr(params, 'frameUrl', None) or getattr(params, 'url', None) or ''
+				pref_o = urlparse(prefer) if prefer else None
+				frames = list(pg.frames)
+				def score(fr):
+					if not pref_o:
+						return 0
+					try:
+						fo = urlparse(fr.url)
+						return 2 if (fo.scheme, fo.netloc) == (pref_o.scheme, pref_o.netloc) else 0
+					except Exception:
+						return 0
+				frames.sort(key=score, reverse=True)
+				for fr in frames:
+					try:
+						loc, used = await get_best_element_handle(fr, selector, params, timeout_ms=max(800, DEFAULT_ACTION_TIMEOUT_MS // 2))
+						return fr, loc, used
+					except Exception:
+						continue
+				return None, None, None
+
 			try:
-				# If the step declares a URL and it's different from current, navigate first (minimum action to reach expected DOM)
+				# Only auto-navigate for top-document clicks (no frame hints) when a different URL is declared
 				curr = (page.url or '').split('#')[0]
-				tgt = (getattr(params, 'url', None) or getattr(params, 'frameUrl', None) or '').split('#')[0]
-				if tgt and tgt.startswith('http') and curr != tgt:
-					await page.goto(tgt)
+				declared_url = (getattr(params, 'url', None) or '').split('#')[0]
+				has_frame_hints = bool(getattr(params, 'frameIdPath', None) or getattr(params, 'frameUrl', None))
+				if declared_url and declared_url.startswith('http') and not has_frame_hints and curr != declared_url:
+					await page.goto(declared_url)
 					await page.wait_for_load_state()
 
 				ctx = _select_context(page)
-				locator, selector_used = await get_best_element_handle(
-					ctx,
-					params.cssSelector,
-					params,
-					timeout_ms=DEFAULT_ACTION_TIMEOUT_MS,
-				)
+				try:
+					locator, selector_used = await get_best_element_handle(
+						ctx,
+						params.cssSelector,
+						params,
+						timeout_ms=DEFAULT_ACTION_TIMEOUT_MS,
+					)
+				except Exception:
+					# Fallback: search all frames
+					fr, locator, selector_used = await _find_in_frames(page, params.cssSelector)
+					if locator is None:
+						raise
+
 				await locator.click(force=True)
 
-				msg = f'🖱️  Clicked element with CSS selector: {truncate_selector(selector_used)} (original: {truncate_selector(original_selector)})'
+				used_str = selector_used if isinstance(selector_used, str) and selector_used else params.cssSelector
+				msg = f'🖱️  Clicked element with CSS selector: {truncate_selector(used_str)} (original: {truncate_selector(original_selector)})'
 				logger.info(msg)
 				return ActionResult(extracted_content=msg, include_in_memory=True)
 			except Exception as e:
