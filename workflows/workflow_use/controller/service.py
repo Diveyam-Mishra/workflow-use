@@ -87,8 +87,7 @@ class WorkflowController(Controller):
 			# If frameUrl or frameIdPath are provided, narrow the search to that frame
 			def _select_context(pg):
 				try:
-					from playwright.async_api import Page, Frame
-					ctx: Page | Frame = pg
+					ctx = pg
 					# If frame hints point to top document, stay on page
 					fid = getattr(params, 'frameIdPath', None)
 					furl = getattr(params, 'frameUrl', None)
@@ -99,7 +98,9 @@ class WorkflowController(Controller):
 						segs = [s for s in str(fid).split('.') if s != '']
 						if all(s == '0' for s in segs):
 							return pg
-						f = pg.main_frame
+						f = getattr(pg, 'main_frame', None)
+						if not f:
+							return pg
 						for s in segs[1:]:  # skip top marker
 							idx = int(s)
 							if 0 <= idx < len(f.child_frames):
@@ -116,7 +117,7 @@ class WorkflowController(Controller):
 							return pg
 					except Exception:
 						pass
-					for fr in pg.frames:
+					for fr in getattr(pg, 'frames', []):
 						try:
 							ff = urlparse(fr.url)
 							if (ff.scheme, ff.netloc) == (pf.scheme, pf.netloc) and fr.url.startswith(furl):
@@ -131,7 +132,7 @@ class WorkflowController(Controller):
 			async def _find_in_frames(pg, selector: str):
 				prefer = getattr(params, 'frameUrl', None) or getattr(params, 'url', None) or ''
 				pref_o = urlparse(prefer) if prefer else None
-				frames = list(pg.frames)
+				frames = list(getattr(pg, 'frames', []))
 				def score(fr):
 					if not pref_o:
 						return 0
