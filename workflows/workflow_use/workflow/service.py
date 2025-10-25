@@ -11,7 +11,7 @@ from browser_use import Agent, Browser
 from browser_use.agent.views import ActionResult, AgentHistoryList
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, create_model
@@ -462,7 +462,7 @@ class Workflow:
 		combined_text = '\n\n'.join(extracted_contents)
 
 		messages: list[BaseMessage] = [
-			AIMessage(content=STRUCTURED_OUTPUT_PROMPT),
+			SystemMessage(content=STRUCTURED_OUTPUT_PROMPT),
 			HumanMessage(content=combined_text),
 		]
 

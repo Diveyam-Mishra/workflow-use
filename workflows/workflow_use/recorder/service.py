@@ -2,6 +2,7 @@ import asyncio
 import json
 import pathlib
 from typing import Optional
+from urllib.parse import urlparse
 
 import uvicorn
 from browser_use import Browser
@@ -88,14 +89,18 @@ class RecordingService:
 				wf = self.last_workflow_update_event.payload
 				# Backend safety filter: drop about:blank and obvious ad/analytics iframe navigations
 				try:
+					def _step_field(step, field: str):
+						if isinstance(step, dict):
+							return step.get(field)
+						return getattr(step, field, None)
+
 					clean_steps = []
 					for s in wf.steps:
-						st = getattr(s, 'type', None) or (s.get('type') if isinstance(s, dict) else None)
-						url = getattr(s, 'url', None) or (s.get('url') if isinstance(s, dict) else None)
+						st = _step_field(s, 'type')
+						url = _step_field(s, 'url')
 						if st == 'navigation':
 							if not url or url == 'about:blank':
 								continue
-							from urllib.parse import urlparse
 							host = urlparse(url).hostname or ''
 							blocked = any(
 								pat in host for pat in (

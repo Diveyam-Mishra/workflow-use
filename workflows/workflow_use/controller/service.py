@@ -6,6 +6,7 @@ from browser_use.agent.views import ActionResult
 from browser_use.controller.service import Controller
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.prompts import PromptTemplate
+from urllib.parse import urlparse
 
 from workflow_use.controller.utils import get_best_element_handle, truncate_selector
 from workflow_use.controller.views import (
@@ -107,30 +108,27 @@ class WorkflowController(Controller):
 								return pg
 						return f
 					if furl:
-						from urllib.parse import urlparse
-						pf = urlparse(furl)
-						# If frameUrl equals current page URL (origin+path), stay on page
+					pf = urlparse(furl)
+					# If frameUrl equals current page URL (origin+path), stay on page
+					try:
+						cu = urlparse(curr_url)
+						if (cu.scheme, cu.netloc, cu.path) == (pf.scheme, pf.netloc, pf.path):
+							return pg
+					except Exception:
+						pass
+					for fr in pg.frames:
 						try:
-							from urllib.parse import urlparse as _u
-							cu = _u(curr_url)
-							if (cu.scheme, cu.netloc, cu.path) == (pf.scheme, pf.netloc, pf.path):
-								return pg
+							ff = urlparse(fr.url)
+							if (ff.scheme, ff.netloc) == (pf.scheme, pf.netloc) and fr.url.startswith(furl):
+								return fr
 						except Exception:
-							pass
-						for fr in pg.frames:
-							try:
-								ff = urlparse(fr.url)
-								if (ff.scheme, ff.netloc) == (pf.scheme, pf.netloc) and fr.url.startswith(furl):
-									return fr
-							except Exception:
-								continue
+							continue
 				except Exception:
 					return pg
 				return ctx
 
 			# Fallback: search all frames for selector (prefer frames matching target origin)
 			async def _find_in_frames(pg, selector: str):
-				from urllib.parse import urlparse
 				prefer = getattr(params, 'frameUrl', None) or getattr(params, 'url', None) or ''
 				pref_o = urlparse(prefer) if prefer else None
 				frames = list(pg.frames)
@@ -176,7 +174,7 @@ class WorkflowController(Controller):
 
 				await locator.click(force=True)
 
-				used_str = selector_used if isinstance(selector_used, str) and selector_used else params.cssSelector
+				used_str = selector_used if isinstance(selector_used, str) else params.cssSelector
 				msg = f'🖱️  Clicked element with CSS selector: {truncate_selector(used_str)} (original: {truncate_selector(original_selector)})'
 				logger.info(msg)
 				return ActionResult(extracted_content=msg, include_in_memory=True)
@@ -285,7 +283,7 @@ class WorkflowController(Controller):
 		async def scroll(params: ScrollDeterministicAction, browser_session: Browser) -> ActionResult:
 			"""Scroll the page by the given x/y pixel offsets."""
 			page = await browser_session.get_current_page()
-			await page.evaluate(f'window.scrollBy({params.scrollX}, {params.scrollY});')
+			await page.evaluate('(x, y) => window.scrollBy(x, y)', params.scrollX, params.scrollY)
 			msg = f'📜  Scrolled page by (x={params.scrollX}, y={params.scrollY})'
 			logger.info(msg)
 			return ActionResult(extracted_content=msg, include_in_memory=True)
