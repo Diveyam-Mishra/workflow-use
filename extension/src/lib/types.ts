@@ -2,11 +2,11 @@ export interface StoredCustomClickEvent {
   timestamp: number;
   url: string;
   frameUrl: string;
+  frameIdPath?: string;
   xpath: string;
   cssSelector?: string;
   elementTag: string;
   elementText: string;
-  targetText?: string; // Semantic targeting text
   tabId: number;
   messageType: "CUSTOM_CLICK_EVENT";
   screenshot?: string;
@@ -16,11 +16,11 @@ export interface StoredCustomInputEvent {
   timestamp: number;
   url: string;
   frameUrl: string;
+  frameIdPath?: string;
   xpath: string;
   cssSelector?: string;
   elementTag: string;
   value: string;
-  targetText?: string; // Semantic targeting text
   tabId: number;
   messageType: "CUSTOM_INPUT_EVENT";
   screenshot?: string;
@@ -30,6 +30,7 @@ export interface StoredCustomSelectEvent {
   timestamp: number;
   url: string;
   frameUrl: string;
+  frameIdPath?: string;
   xpath: string;
   cssSelector?: string;
   elementTag: string;
@@ -44,21 +45,13 @@ export interface StoredCustomKeyEvent {
   timestamp: number;
   url: string;
   frameUrl: string;
+  frameIdPath?: string;
   key: string;
   xpath?: string; // XPath of focused element
   cssSelector?: string;
   elementTag?: string;
   tabId: number;
   messageType: "CUSTOM_KEY_EVENT";
-  screenshot?: string;
-}
-
-export interface StoredExtractionEvent {
-  timestamp: number;
-  url: string;
-  tabId: number;
-  extractionGoal: string;
-  messageType: "EXTRACTION_STEP";
   screenshot?: string;
 }
 
@@ -84,6 +77,7 @@ export interface StoredRrwebEvent {
   data: any;
   timestamp: number;
   tabId: number;
+  frameUrl?: string; // URL of the frame where the rrweb event originated (when injected per-frame)
   messageType: "RRWEB_EVENT";
 }
 
@@ -93,8 +87,7 @@ export type StoredEvent =
   | StoredCustomSelectEvent
   | StoredCustomKeyEvent
   | StoredTabEvent
-  | StoredRrwebEvent
-  | StoredExtractionEvent;
+  | StoredRrwebEvent;
 
 // --- Data Structures ---
 
