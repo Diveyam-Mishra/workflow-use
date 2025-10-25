@@ -380,6 +380,7 @@ export default defineBackground(() => {
               cssSelector: click.cssSelector,
               elementTag: click.elementTag,
               elementText: click.elementText,
+              targetText: (click as any).targetText,
               screenshot: click.screenshot,
             };
             steps.push(step);
@@ -427,6 +428,7 @@ export default defineBackground(() => {
                 cssSelector: inputEvent.cssSelector,
                 elementTag: inputEvent.elementTag,
                 value: inputEvent.value,
+                targetText: (inputEvent as any).targetText,
                 screenshot: inputEvent.screenshot,
               };
               steps.push(newStep);

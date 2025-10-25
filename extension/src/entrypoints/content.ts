@@ -89,6 +89,77 @@ function computeFrameIdPath(): string {
 
 
 
+
+
+function getLabelText(element: HTMLElement): string | undefined {
+  const id = (element as HTMLInputElement).id;
+  if (id) {
+    try {
+      const label = document.querySelector(`label[for="${CSS.escape(id)}"]`);
+      const labelText = label?.textContent?.trim();
+      if (labelText) {
+        return labelText.slice(0, 200);
+      }
+    } catch (error) {
+      console.warn("Failed to query label by id", error);
+    }
+  }
+  let current: HTMLElement | null = element;
+  while (current && current !== document.body) {
+    if (current.tagName.toLowerCase() === "label") {
+      const labelText = current.textContent?.trim();
+      if (labelText) {
+        return labelText.slice(0, 200);
+      }
+    }
+    current = current.parentElement;
+  }
+  return undefined;
+}
+
+function getTextFromAriaLabelledBy(element: HTMLElement): string | undefined {
+  const ids = element.getAttribute("aria-labelledby");
+  if (!ids) return undefined;
+  const parts = ids.split(/\s+/).filter(Boolean);
+  const texts: string[] = [];
+  for (const id of parts) {
+    const ref = document.getElementById(id);
+    const text = ref?.textContent?.trim();
+    if (text) {
+      texts.push(text);
+    }
+  }
+  if (!texts.length) {
+    return undefined;
+  }
+  return texts.join(" ").slice(0, 200);
+}
+
+function computeTargetText(element: HTMLElement): string | undefined {
+  const tagName = element.tagName.toLowerCase();
+  const inputType = (element as HTMLInputElement).type?.toLowerCase();
+  const labelText = getLabelText(element);
+  const ariaLabel = element.getAttribute("aria-label")?.trim();
+  const ariaLabelledBy = getTextFromAriaLabelledBy(element);
+  const placeholder = element.getAttribute("placeholder")?.trim();
+  const title = element.getAttribute("title")?.trim();
+  const valueAttr = (element as HTMLInputElement).value?.trim();
+  const textContent = element.textContent?.trim();
+  const candidates: (string | undefined)[] = [];
+  if (tagName === "button" || (tagName === "input" && ["button", "submit"].includes(inputType || ""))) {
+    candidates.push(textContent, labelText, ariaLabel, ariaLabelledBy, title, valueAttr);
+  } else if (["input", "textarea", "select"].includes(tagName)) {
+    candidates.push(labelText, placeholder, ariaLabel, ariaLabelledBy, title, valueAttr, textContent);
+  } else {
+    candidates.push(labelText, ariaLabel, ariaLabelledBy, textContent, title);
+  }
+  for (const candidate of candidates) {
+    if (candidate && candidate.trim().length > 0) {
+      return candidate.trim().slice(0, 200);
+    }
+  }
+  return undefined;
+}
 function getEnhancedCSSSelector(element: HTMLElement, xpath: string): string {
   try {
     // Base selector from simplified XPath or just tagName
@@ -287,6 +358,7 @@ function handleCustomClick(event: MouseEvent) {
       cssSelector: getEnhancedCSSSelector(targetElement, xpath),
       elementTag: targetElement.tagName,
       elementText: targetElement.textContent?.trim().slice(0, 200) || "",
+      targetText: computeTargetText(targetElement),
     };
     chrome.runtime.sendMessage({ type: "CUSTOM_CLICK_EVENT", payload: clickData });
   } catch (error) { console.error("Error capturing click data:", error); }
@@ -317,6 +389,7 @@ function handleInput(event: Event) {
       cssSelector: getEnhancedCSSSelector(targetElement, xpath),
       elementTag: targetElement.tagName,
       value: isPassword ? "********" : targetElement.value,
+      targetText: computeTargetText(targetElement),
     };
 
     // Dedupe rule 1: If value unchanged for this element and within debounce window, skip
@@ -370,6 +443,7 @@ function handleSelectChange(event: Event) {
       elementTag: targetElement.tagName,
       selectedValue: targetElement.value,
       selectedText: selectedOption ? selectedOption.text : "", // Get selected option text
+      targetText: computeTargetText(targetElement),
     };
     console.log("Sending CUSTOM_SELECT_EVENT:", selectData);
     chrome.runtime.sendMessage({

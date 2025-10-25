@@ -1,4 +1,4 @@
-export interface StoredCustomClickEvent {
+﻿export interface StoredCustomClickEvent {
   timestamp: number;
   url: string;
   frameUrl: string;
@@ -7,6 +7,7 @@ export interface StoredCustomClickEvent {
   cssSelector?: string;
   elementTag: string;
   elementText: string;
+  targetText?: string; // Semantic targeting text
   tabId: number;
   messageType: "CUSTOM_CLICK_EVENT";
   screenshot?: string;
@@ -21,6 +22,7 @@ export interface StoredCustomInputEvent {
   cssSelector?: string;
   elementTag: string;
   value: string;
+  targetText?: string; // Semantic targeting text
   tabId: number;
   messageType: "CUSTOM_INPUT_EVENT";
   screenshot?: string;
@@ -52,6 +54,15 @@ export interface StoredCustomKeyEvent {
   elementTag?: string;
   tabId: number;
   messageType: "CUSTOM_KEY_EVENT";
+  screenshot?: string;
+}
+
+export interface StoredExtractionEvent {
+  timestamp: number;
+  url: string;
+  tabId: number;
+  extractionGoal: string;
+  messageType: "EXTRACTION_STEP";
   screenshot?: string;
 }
 
@@ -87,7 +98,8 @@ export type StoredEvent =
   | StoredCustomSelectEvent
   | StoredCustomKeyEvent
   | StoredTabEvent
-  | StoredRrwebEvent;
+  | StoredRrwebEvent
+  | StoredExtractionEvent;
 
 // --- Data Structures ---
 
