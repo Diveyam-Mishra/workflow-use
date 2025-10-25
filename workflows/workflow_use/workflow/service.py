@@ -634,7 +634,7 @@ class Workflow:
 			augmented_inputs = kwargs.copy() if kwargs else {}
 			for input_def in self.inputs_def:
 				if not input_def.required and input_def.name not in augmented_inputs:
-					augmented_inputs[input_def.name] = ''
+					augmented_inputs[input_def.name] = None
 			result = await self.run(inputs=augmented_inputs)
 			# Serialise non-string output so models that expect a string tool
 			# response still work.
