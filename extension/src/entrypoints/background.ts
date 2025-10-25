@@ -43,21 +43,6 @@ export default defineBackground(() => {
   const interactedFrameUrls: Record<number, Set<string>> = {};
   // Additionally track last interaction time per frame for time-window gating
   const interactedFrameTimes: Record<number, Record<string, number>> = {};
-  // Hostname patterns for iframe navigation noise we want to suppress
-  const BLOCKED_IFRAME_HOST_PATTERNS: RegExp[] = [
-    /doubleclick\.net$/i,
-    /googlesyndication\.com$/i,
-    /googleadservices\.com$/i,
-    /amazon-adsystem\.com$/i,
-    /recaptcha\.google\.com$/i,
-    /recaptcha\.net$/i,
-    /googletagmanager\.com$/i,
-    /indexww\.com$/i,
-    /adtrafficquality\.google$/i,
-    /2mdn\.net$/i,
-    /gstaticadssl\.googleapis\.com$/i,
-  ];
-
   // Heuristic window (ms) within which a created tab following a user intent is considered relevant.
   const NEW_TAB_INTENT_WINDOW_MS = 4000;
 
@@ -96,6 +81,7 @@ export default defineBackground(() => {
 
   // Function to broadcast workflow data updates to the console bus
   async function broadcastWorkflowDataUpdate(): Promise<Workflow> {
+    await settingsReady;
     // console.log("[DEBUG] broadcastWorkflowDataUpdate: Entered function"); // Optional: Keep for debugging
     const rawSteps: Step[] = Object.keys(sessionLogs)
       .flatMap((tabIdStr) => {
@@ -325,12 +311,17 @@ export default defineBackground(() => {
     blocklist: [
       'doubleclick.net','googlesyndication.com','googleadservices.com',
       'amazon-adsystem.com','2mdn.net','recaptcha.google.com','recaptcha.net',
-      'googletagmanager.com','indexww.com','adtrafficquality.google'
+      'googletagmanager.com','indexww.com','adtrafficquality.google','gstaticadssl.googleapis.com'
     ] as string[],
     allowlist: [] as string[],
   };
   let settings: { enableIframes: boolean; iframeWindow: number; blocklist: string[]; allowlist: string[] } = { ...DEFAULT_SETTINGS };
-  chrome.storage.sync.get(DEFAULT_SETTINGS, (s: any) => { settings = { ...settings, ...s }; });
+  const settingsReady = new Promise<void>((resolve) => {
+    chrome.storage.sync.get(DEFAULT_SETTINGS, (s: any) => {
+      settings = { ...DEFAULT_SETTINGS, ...s };
+      resolve();
+    });
+  });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'sync') return;
     const next = { ...settings } as any;
@@ -548,7 +539,8 @@ export default defineBackground(() => {
                 const times = interactedFrameTimes[rrEvent.tabId] || {};
                 const lastTs = times[fUrl];
                 if (!lastTs) break;
-                if (Date.now() - lastTs > settings.iframeWindow) break;
+                const eventTimestamp = typeof (rrEvent as any).timestamp === "number" ? (rrEvent as any).timestamp : Date.now();
+                if (eventTimestamp - lastTs > settings.iframeWindow) break;
               }
             } catch {
               break;
@@ -643,7 +635,8 @@ export default defineBackground(() => {
           if (!interactedFrameUrls[tabId]) interactedFrameUrls[tabId] = new Set();
           interactedFrameUrls[tabId].add(eventPayload.frameUrl);
           if (!interactedFrameTimes[tabId]) interactedFrameTimes[tabId] = {};
-          interactedFrameTimes[tabId][eventPayload.frameUrl] = Date.now();
+          const interactionTimestamp = typeof eventPayload.timestamp === "number" ? eventPayload.timestamp : Date.now();
+          interactedFrameTimes[tabId][eventPayload.frameUrl] = interactionTimestamp;
         }
         broadcastWorkflowDataUpdate(); // Call is async, will not block
         // console.log(`Stored ${message.type} from tab ${tabId}`);

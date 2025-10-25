@@ -64,6 +64,31 @@ const SAFE_ATTRIBUTES = new Set([
   "data-testid",
 ]);
 
+function computeFrameIdPath(): string {
+  try {
+    let current: Window & typeof globalThis = window;
+    const parts: number[] = [];
+    while (current !== current.parent) {
+      const parent = current.parent;
+      let idx = 0;
+      for (let i = 0; i < parent.frames.length; i++) {
+        if (parent.frames[i] === current) {
+          idx = i;
+          break;
+        }
+      }
+      parts.unshift(idx);
+      current = parent;
+      if (parts.length > 10) break;
+    }
+    return parts.length ? parts.join('.') : '0';
+  } catch {
+    return '0';
+  }
+}
+
+
+
 function getEnhancedCSSSelector(element: HTMLElement, xpath: string): string {
   try {
     // Base selector from simplified XPath or just tagName
@@ -124,13 +149,7 @@ function startRecorder() {
 
       const frameUrl = window.location.href;
       const isTopFrame = window.self === window.top;
-      const frameIdPath = (() => {
-        try {
-          let win: any = window; const parts: number[] = [];
-          while (win !== win.parent) { const parent = win.parent; let idx=0; for (let i=0;i<parent.frames.length;i++){ if(parent.frames[i]===win){idx=i;break;} } parts.unshift(idx); win=parent; if(parts.length>10) break; }
-          return parts.length ? parts.join('.') : '0';
-        } catch { return '0'; }
-      })();
+      const frameIdPath = computeFrameIdPath();
 
       // Handle scroll events with debouncing and direction detection
       if (
@@ -256,23 +275,7 @@ function handleCustomClick(event: MouseEvent) {
   const targetElement = event.target as HTMLElement;
   if (!targetElement) return;
   // Determine a frame identifier (best-effort). Top frame = 0, nested frames build path.
-  const frameIdPath = (() => {
-    try {
-      let win: any = window;
-      const parts: number[] = [];
-      while (win !== win.parent) {
-        const parent = win.parent;
-        let index = 0;
-        for (let i = 0; i < parent.frames.length; i++) {
-          if (parent.frames[i] === win) { index = i; break; }
-        }
-        parts.unshift(index);
-        win = parent;
-        if (parts.length > 10) break; // safety
-      }
-      return parts.length ? parts.join('.') : '0';
-    } catch { return '0'; }
-  })();
+  const frameIdPath = computeFrameIdPath();
   try {
     const xpath = getXPath(targetElement);
     const clickData = {
@@ -302,13 +305,7 @@ function handleInput(event: Event) {
   // Ignore programmatic (non user-trusted) input events – these often cause massive duplication
   if (!(event as InputEvent).isTrusted) return;
 
-  const frameIdPath = (() => {
-    try {
-      let win: any = window; const parts: number[] = [];
-      while (win !== win.parent) { const parent = win.parent; let idx=0; for (let i=0;i<parent.frames.length;i++){ if(parent.frames[i]===win){idx=i;break;} } parts.unshift(idx); win=parent; if(parts.length>10) break; }
-      return parts.length ? parts.join('.') : '0';
-    } catch { return '0'; }
-  })();
+  const frameIdPath = computeFrameIdPath();
   try {
     const xpath = getXPath(targetElement);
     const inputData = {
@@ -358,7 +355,7 @@ function handleSelectChange(event: Event) {
   const targetElement = event.target as HTMLSelectElement;
   // Ensure it's a select element
   if (!targetElement || targetElement.tagName !== "SELECT") return;
-  const frameIdPath = (() => { try { let win:any=window; const parts:number[]=[]; while(win!==win.parent){const parent=win.parent; let idx=0; for(let i=0;i<parent.frames.length;i++){ if(parent.frames[i]===win){idx=i;break;} } parts.unshift(idx); win=parent; if(parts.length>10) break;} return parts.length?parts.join('.'):'0'; } catch { return '0'; } })();
+  const frameIdPath = computeFrameIdPath();
 
   try {
     const xpath = getXPath(targetElement);
@@ -440,7 +437,7 @@ function handleKeydown(event: KeyboardEvent) {
       }
     }
 
-    const frameIdPath = (() => { try { let win:any=window; const parts:number[]=[]; while(win!==win.parent){const parent=win.parent; let idx=0; for(let i=0;i<parent.frames.length;i++){ if(parent.frames[i]===win){idx=i;break;} } parts.unshift(idx); win=parent; if(parts.length>10) break;} return parts.length?parts.join('.'):'0'; } catch { return '0'; } })();
+    const frameIdPath = computeFrameIdPath();
     try {
       const keyData = {
         timestamp: Date.now(),
@@ -681,3 +678,4 @@ export default defineContentScript({
     // });
   },
 });
+
