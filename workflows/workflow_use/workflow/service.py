@@ -76,6 +76,7 @@ class Workflow:
 		self.controller = controller or WorkflowController()
 
 		self.browser = browser or Browser()
+		self.browser.browser_profile.cross_origin_iframes = True
 
 		# Hack to not close it after agent kicks in
 		self.browser.browser_profile.keep_alive = True
@@ -142,11 +143,11 @@ class Workflow:
 			if css_selector:
 				try:
 					await self.browser._wait_for_stable_network()
-					page = await self.browser.get_current_page()
+					page = await self.browser.must_get_current_page()
 
 					# If the next step declares a URL/frameUrl and it does not match the current page URL,
 					# skip waiting for its element on the current page (prevents false failures like step 7).
-					curr_url = (page.url or '').split('#')[0]
+					curr_url = (await page.get_url() or '').split('#')[0]
 					declared_next_url = (getattr(next_step_resolved, 'url', None) or getattr(next_step_resolved, 'frameUrl', None) or '').split('#')[0]
 					if declared_next_url and declared_next_url != curr_url:
 						logger.info(
@@ -154,10 +155,10 @@ class Workflow:
 						)
 					else:
 						logger.info(f'Waiting for element with selector: {truncate_selector(css_selector)}')
-						locator, selector_used = await get_best_element_handle(
-							page, css_selector, next_step_resolved, timeout_ms=WAIT_FOR_ELEMENT_TIMEOUT
+						handle = await get_best_element_handle(
+							self.browser, css_selector, next_step_resolved, timeout_ms=WAIT_FOR_ELEMENT_TIMEOUT
 						)
-						logger.info(f'Element with selector found: {truncate_selector(selector_used)}')
+						logger.info(f'Element with selector found: {truncate_selector(handle.selector_used)}')
 				except Exception as e:
 					logger.error(f'Failed to wait for element with selector: {truncate_selector(css_selector)}. Error: {e}')
 					raise Exception(f'Failed to wait for element. Selector: {css_selector}') from e

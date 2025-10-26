@@ -122,6 +122,16 @@ function startRecorder() {
     emit(event) {
       if (!isRecordingActive) return;
 
+      const frameUrl = window.location.href;
+      const isTopFrame = window.self === window.top;
+      const frameIdPath = (() => {
+        try {
+          let win: any = window; const parts: number[] = [];
+          while (win !== win.parent) { const parent = win.parent; let idx=0; for (let i=0;i<parent.frames.length;i++){ if(parent.frames[i]===win){idx=i;break;} } parts.unshift(idx); win=parent; if(parts.length>10) break; }
+          return parts.length ? parts.join('.') : '0';
+        } catch { return '0'; }
+      })();
+
       // Handle scroll events with debouncing and direction detection
       if (
         event.type === EventType.IncrementalSnapshot &&
@@ -157,7 +167,10 @@ function startRecorder() {
             type: "RRWEB_EVENT",
             payload: {
               ...event,
-              data: roundedScrollData, // Use rounded coordinates
+              data: roundedScrollData,
+              frameUrl,
+              frameIdPath,
+              isTopFrame,
             },
           });
           lastDirection = currentDirection;
@@ -178,15 +191,18 @@ function startRecorder() {
             type: "RRWEB_EVENT",
             payload: {
               ...event,
-              data: roundedScrollData, // Use rounded coordinates
+              data: roundedScrollData,
+              frameUrl,
+              frameIdPath,
+              isTopFrame,
             },
           });
           scrollTimeout = null;
           lastDirection = null; // Reset direction for next scroll
         }, DEBOUNCE_MS);
       } else {
-        // Pass through non-scroll events unchanged
-        chrome.runtime.sendMessage({ type: "RRWEB_EVENT", payload: event });
+        // Pass through non-scroll events unchanged, but include frame context for filtering in background
+        chrome.runtime.sendMessage({ type: "RRWEB_EVENT", payload: { ...event, frameUrl, frameIdPath, isTopFrame } });
       }
     },
     maskInputOptions: {
@@ -536,7 +552,24 @@ function handleCustomClick(event: MouseEvent) {
   if (!isRecordingActive) return;
   const targetElement = event.target as HTMLElement;
   if (!targetElement) return;
-
+  // Determine a frame identifier (best-effort). Top frame = 0, nested frames build path.
+  const frameIdPath = (() => {
+    try {
+      let win: any = window;
+      const parts: number[] = [];
+      while (win !== win.parent) {
+        const parent = win.parent;
+        let index = 0;
+        for (let i = 0; i < parent.frames.length; i++) {
+          if (parent.frames[i] === win) { index = i; break; }
+        }
+        parts.unshift(index);
+        win = parent;
+        if (parts.length > 10) break; // safety
+      }
+      return parts.length ? parts.join('.') : '0';
+    } catch { return '0'; }
+  })();
   try {
     const xpath = getXPath(targetElement);
     const semanticInfo = extractSemanticInfo(targetElement);
@@ -594,9 +627,10 @@ function handleCustomClick(event: MouseEvent) {
     
     const clickData = {
       timestamp: Date.now(),
-      url: document.location.href, // Use document.location for main page URL
-      frameUrl: window.location.href, // URL of the frame where the event occurred
-      xpath: xpath,
+      url: document.location.href,
+      frameUrl: window.location.href,
+      frameIdPath,
+      xpath,
       cssSelector: getEnhancedCSSSelector(targetElement, xpath),
       elementTag: targetElement.tagName,
       elementText: semanticInfo.textContent,
@@ -608,14 +642,8 @@ function handleCustomClick(event: MouseEvent) {
       // Enhanced radio button information
       radioButtonInfo: semanticInfo.radioButtonInfo,
     };
-    console.log("Sending CUSTOM_CLICK_EVENT:", clickData);
-    chrome.runtime.sendMessage({
-      type: "CUSTOM_CLICK_EVENT",
-      payload: clickData,
-    });
-  } catch (error) {
-    console.error("Error capturing click data:", error);
-  }
+    chrome.runtime.sendMessage({ type: "CUSTOM_CLICK_EVENT", payload: clickData });
+  } catch (error) { console.error("Error capturing click data:", error); }
 }
 
 // Helper function to determine if we should skip capturing this click event
@@ -658,12 +686,24 @@ function isElementVisible(element: HTMLElement): boolean {
 // --- End Custom Click Handler ---
 
 // --- Custom Input Handler ---
+// Maintain last recorded value & timestamp per element (keyed by xpath) to suppress noisy repeats
+const lastInputRecord: Record<string, { value: string; ts: number }> = {};
 function handleInput(event: Event) {
   if (!isRecordingActive) return;
   const targetElement = event.target as HTMLInputElement | HTMLTextAreaElement;
   if (!targetElement || !("value" in targetElement)) return;
   const isPassword = targetElement.type === "password";
 
+  // Ignore programmatic (non user-trusted) input events – these often cause massive duplication
+  if (!(event as InputEvent).isTrusted) return;
+
+  const frameIdPath = (() => {
+    try {
+      let win: any = window; const parts: number[] = [];
+      while (win !== win.parent) { const parent = win.parent; let idx=0; for (let i=0;i<parent.frames.length;i++){ if(parent.frames[i]===win){idx=i;break;} } parts.unshift(idx); win=parent; if(parts.length>10) break; }
+      return parts.length ? parts.join('.') : '0';
+    } catch { return '0'; }
+  })();
   try {
     const xpath = getXPath(targetElement);
     const semanticInfo = extractSemanticInfo(targetElement as HTMLElement);
@@ -681,6 +721,7 @@ function handleInput(event: Event) {
       timestamp: Date.now(),
       url: document.location.href,
       frameUrl: window.location.href,
+      frameIdPath,
       xpath: xpath,
       cssSelector: getEnhancedCSSSelector(targetElement, xpath),
       elementTag: targetElement.tagName,
@@ -690,6 +731,26 @@ function handleInput(event: Event) {
       targetText: targetText,
       semanticInfo: semanticInfo,
     };
+
+    // Dedupe rule 1: If value unchanged for this element and within debounce window, skip
+    const DEBOUNCE_MS_INPUT = 1500;
+    const prev = lastInputRecord[xpath];
+    if (prev && prev.value === inputData.value && inputData.timestamp - prev.ts < DEBOUNCE_MS_INPUT) {
+      return; // Suppress noisy duplicate
+    }
+
+    // Dedupe rule 2: If value is empty string and we already recorded empty in last 5s, suppress further empties
+    if (
+      inputData.value === "" &&
+      prev &&
+      prev.value === "" &&
+      inputData.timestamp - prev.ts < 5000
+    ) {
+      return;
+    }
+
+    // Store/update last record metadata
+    lastInputRecord[xpath] = { value: inputData.value, ts: inputData.timestamp };
     console.log("Sending CUSTOM_INPUT_EVENT:", inputData);
     chrome.runtime.sendMessage({
       type: "CUSTOM_INPUT_EVENT",
@@ -707,6 +768,7 @@ function handleSelectChange(event: Event) {
   const targetElement = event.target as HTMLSelectElement;
   // Ensure it's a select element
   if (!targetElement || targetElement.tagName !== "SELECT") return;
+  const frameIdPath = (() => { try { let win:any=window; const parts:number[]=[]; while(win!==win.parent){const parent=win.parent; let idx=0; for(let i=0;i<parent.frames.length;i++){ if(parent.frames[i]===win){idx=i;break;} } parts.unshift(idx); win=parent; if(parts.length>10) break;} return parts.length?parts.join('.'):'0'; } catch { return '0'; } })();
 
   try {
     const xpath = getXPath(targetElement);
@@ -731,6 +793,7 @@ function handleSelectChange(event: Event) {
       timestamp: Date.now(),
       url: document.location.href,
       frameUrl: window.location.href,
+      frameIdPath,
       xpath: xpath,
       cssSelector: getEnhancedCSSSelector(targetElement, xpath),
       elementTag: targetElement.tagName,
@@ -807,11 +870,13 @@ function handleKeydown(event: KeyboardEvent) {
       }
     }
 
+    const frameIdPath = (() => { try { let win:any=window; const parts:number[]=[]; while(win!==win.parent){const parent=win.parent; let idx=0; for(let i=0;i<parent.frames.length;i++){ if(parent.frames[i]===win){idx=i;break;} } parts.unshift(idx); win=parent; if(parts.length>10) break;} return parts.length?parts.join('.'):'0'; } catch { return '0'; } })();
     try {
       const keyData = {
         timestamp: Date.now(),
         url: document.location.href,
         frameUrl: window.location.href,
+        frameIdPath,
         key: keyToLog, // The key or combination pressed
         xpath: xpath, // XPath of the element in focus (if any)
         cssSelector: cssSelector, // CSS selector of the element in focus (if any)
@@ -974,6 +1039,9 @@ function handleBlur(event: FocusEvent) {
 
 export default defineContentScript({
   matches: ["<all_urls>"],
+  // Ensure injection into all frames (iframes) so we can capture interactions inside nested documents.
+  allFrames: true,
+  matchAboutBlank: true,
   main(ctx) {
     // Listener for status updates from the background script
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
