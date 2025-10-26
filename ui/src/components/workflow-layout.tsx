@@ -15,8 +15,9 @@ import {
   useEdgesState,
   type OnConnect,
   useReactFlow,
+  type Node,
+  type Edge,
 } from "@xyflow/react";
-import { type Node } from "@xyflow/react";
 import { NodeData } from "../types/node-config-menu.types";
 import { jsonToFlow } from "../utils/json-to-flow";
 import { type WorkflowMetadata } from "../types/workflow-layout.types";
@@ -28,8 +29,8 @@ import { $api } from "../lib/api";
 
 const WorkflowLayout: React.FC = () => {
   const [selected, setSelected] = useState<string | null>(null);
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node<NodeData>>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNode, setSelectedNode] = useState<Node<NodeData> | null>(null);
   const [workflowMetadata, setWorkflowMetadata] =
     useState<WorkflowMetadata | null>(null);
@@ -43,7 +44,10 @@ const WorkflowLayout: React.FC = () => {
   const { data: workflowsResponse, isLoading: isLoadingWorkflows } =
     $api.useQuery("get", "/api/workflows");
 
-  const workflows: string[] = workflowsResponse?.workflows ?? [];
+  const workflows: string[] = React.useMemo(
+    () => workflowsResponse?.workflows ?? [],
+    [workflowsResponse?.workflows]
+  );
 
   // Fetch a specific workflow (enabled only when selected is truthy)
   const { data: selectedWorkflow, isLoading: isLoadingSelectedWorkflow } =
@@ -54,7 +58,7 @@ const WorkflowLayout: React.FC = () => {
         ? {
             params: { path: { name: selected } },
           }
-        : ({} as any),
+        : { params: { path: { name: "" } } },
       {
         enabled: !!selected,
       }
@@ -69,7 +73,7 @@ const WorkflowLayout: React.FC = () => {
   const updateWorkflowMetadata = useCallback(
     async (name: string, metadata: WorkflowMetadata) => {
       await updateMetadataMutation.mutateAsync({
-        body: { name, metadata } as any,
+        body: { name, metadata: metadata as unknown as Record<string, never> },
       });
     },
     [updateMetadataMutation]
@@ -83,8 +87,8 @@ const WorkflowLayout: React.FC = () => {
   );
 
   // Handle node click to show configuration
-  const onNodeClick = useCallback((_: MouseEvent, node: Node<NodeData>) => {
-    setSelectedNode(node);
+  const onNodeClick = useCallback((_: MouseEvent, node: Node) => {
+    setSelectedNode(node as Node<NodeData>);
   }, []);
 
   // Close the node configuration menu
@@ -109,7 +113,7 @@ const WorkflowLayout: React.FC = () => {
       // Apply saved positions if available
       if (selected && savedNodePositions[selected]) {
         const savedPositionsForWorkflow = savedNodePositions[selected] || {};
-        const nodesWithSavedPositions = flowData.nodes.map((node: any) => {
+        const nodesWithSavedPositions = flowData.nodes.map((node: Node<NodeData>) => {
           const savedPosition = savedPositionsForWorkflow[node.id];
           if (savedPosition) {
             return {
@@ -119,12 +123,12 @@ const WorkflowLayout: React.FC = () => {
           }
           return node;
         });
-        setNodes(nodesWithSavedPositions as any);
+        setNodes(nodesWithSavedPositions);
       } else {
-        setNodes(flowData.nodes as any);
+        setNodes(flowData.nodes);
       }
 
-      setEdges(flowData.edges as any);
+      setEdges(flowData.edges);
       setWorkflowMetadata(flowData.metadata);
     }
   }, [selectedWorkflow, selected, savedNodePositions, setNodes, setEdges]);
