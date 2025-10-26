@@ -184,7 +184,7 @@ class WorkflowController(Controller):
 		@self.registry.action('Scroll page', param_model=ScrollDeterministicAction)
 		async def scroll(params: ScrollDeterministicAction, browser_session: Browser) -> ActionResult:
 			page = await browser_session.must_get_current_page()
-			await page.evaluate('(x, y) => { window.scrollBy(x, y); }', params.scrollX, params.scrollY)
+			await page.evaluate('([x, y]) => { window.scrollBy(x, y); }', [params.scrollX, params.scrollY])
 			msg = f'Scrolled page by (x={params.scrollX}, y={params.scrollY})'
 			logger.info(msg)
 			return ActionResult(extracted_content=msg, include_in_memory=True)
